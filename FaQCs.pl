@@ -40,8 +40,9 @@ use File::Basename;
 use Getopt::Long;
 use Parallel::ForkManager;
 use String::Approx;
+use Data::Dumper;
 
-my $version=1.3;
+my $version=1.31;
 my $debug=0;
 
 sub Usage {
@@ -49,7 +50,7 @@ print <<"END";
      Usage: perl $0 [options] [-u unpaired.fastq] -p 'reads1.fastq reads2.fastq' -d out_directory
      Version $version
      Input File: (can use more than once)
-            -u            <File> Unpaired reads
+            -u            <Files> Unpaired reads
             
             -p            <Files> Paired reads in two files and separate by space in quote
      Trim:
@@ -187,6 +188,7 @@ GetOptions("q=i"          => \$opt_q,
            'Ru=s'         => \$trimmed_unpaired_fastq_file, # for galaxy impelementation
            'Rd=s'         => \$trimmed_discard_fastq_file,  # for galaxy impelementation
            'QRpdf=s'      => \$plots_file,                  # for galaxy impelementation
+           "version"      => sub{print "Version: $version\n";exit;},
            "help|?"       => sub{Usage()} );
 
 die "Missing input files.\n", &Usage() unless @unpaired_files or @paired_files;
@@ -208,6 +210,11 @@ my $avg_quality_histogram="$outDir/$prefix.for_qual_histogram.txt";
 my $base_matrix="$outDir/$prefix.base.matrix";
 my $nuc_composition_file="$outDir/$prefix.base_content.txt";
 my $length_histogram="$outDir/$prefix.length_count.txt";
+my $qa_quality_matrix="$outDir/qa.$prefix.quality.matrix";
+my $qa_avg_quality_histogram="$outDir/qa.$prefix.for_qual_histogram.txt";
+my $qa_base_matrix="$outDir/qa.$prefix.base.matrix";
+my $qa_nuc_composition_file="$outDir/qa.$prefix.base_content.txt";
+my $qa_length_histogram="$outDir/qa.$prefix.length_count.txt";
 
 # output files
 $trimmed_discard_fastq_file="$outDir/$prefix.discard.fastq" if (!$trimmed_discard_fastq_file);
@@ -271,7 +278,7 @@ if ($qc_only)
 my ( $total_count,$total_count_1, $total_count_2, $total_len_1,$total_len_2, $total_len);
 my ( $total_num, $trimmed_num,$total_raw_seq_len, $total_trimmed_seq_len);
 my ( $trim_seq_len_std, $trim_seq_len_avg, $max, $min, $median);
-my ( $paired_seq_num, $total_paired_bases );
+my ( $paired_seq_num, $total_paired_bases )=(0,0);
 my ( @split_files, @split_files_2);
 my ( $readsFilterByLen, $basesFilterByLen ) = (0,0);
 my ( $readsTrimByQual, $basesTrimByQual ) = (0,0);
@@ -281,12 +288,12 @@ my ( $readsTrimByAdapter, $basesTrimByAdapter ) = (0,0);
 my ( $readsFilterByAvgQ, $basesFilterByAvgQ ) = (0,0);
 my ( $readsFilterByLowComplexity, $basesFilterByLowComplexity ) = (0,0);
 $N_num_cutoff=1 if (!$N_num_cutoff);
-my %position;
-my %AverageQ;
-my %base_position;
-my %base_content;
-my %len_hash;
-my %filter_stats;
+my (%position, %qa_position);
+my (%AverageQ, %qa_AverageQ);
+my (%base_position,%qa_base_position);
+my (%base_content, %qa_base_content);
+my (%len_hash, %qa_len_hash);
+my (%filter_stats, %qa_filter_stats);
 my %EachAdapter;
 my %EachReplaceN;
 my ( $i_file_name, $i_path, $i_suffix );
@@ -328,6 +335,8 @@ my ($phiX_id,$phiX_seq) = &read_phiX174 if ($filter_phiX);
       
         # retrieve data structure from child
         if (defined($nums_ref)) {  # children are not forced to send anything
+          my $random_sub_raw_ref;
+          $random_sub_raw_ref=$nums_ref->{random_sub_raw} if ( $random_num_ref->{$ident} and !$qc_only);
           my ($total_score, $avg_score);
           $total_num += $nums_ref->{raw_seq_num};
           $trimmed_num += $nums_ref->{trim_seq_num};
@@ -372,24 +381,36 @@ my ($phiX_id,$phiX_seq) = &read_phiX174 if ($filter_phiX);
               } keys %temp_avgQ; 
           my %temp_position= %{$nums_ref->{qual}};
           my %temp_base_position= %{$nums_ref->{base}};
+          my %qa_temp_position= %{$random_sub_raw_ref->{qual}} if ($random_sub_raw_ref);
+          my %qa_temp_base_position= %{$random_sub_raw_ref->{base}} if ($random_sub_raw_ref);
           foreach my $pos (1..($total_raw_seq_len/$total_num))
           {
                 for my $score ($lowest_illumina_score..$highest_illumina_score)
                 { 
                     $position{$pos}->{$score} += $temp_position{$pos}->{$score};
+                    $qa_position{$pos}->{$score} += $qa_temp_position{$pos}->{$score} if ($random_sub_raw_ref);
                     $total_score +=  $score * $temp_position{$pos}->{$score}; 
                 }
                 for my $nuc ("A","T","C","G","N")
                 {
                     $base_position{$pos}->{$nuc} += $temp_base_position{$pos}->{$nuc};
+                    $qa_base_position{$pos}->{$nuc} += $qa_temp_base_position{$pos}->{$nuc} if ($random_sub_raw_ref);
                 }
           }
           my %tmp_base_content = %{$nums_ref->{Base_content}};
+          my %qa_tmp_base_content = %{$random_sub_raw_ref->{Base_content}} if ($random_sub_raw_ref);
           for my $nuc ("A","T","C","G","N","GC")
           {
               while (my ($key, $value)= each %{$tmp_base_content{$nuc}})
               {
                  $base_content{$nuc}->{$key} += $value;
+              }
+              if ($random_sub_raw_ref)
+              {
+                 while (my ($key, $value)= each %{$qa_tmp_base_content{$nuc}})
+                 {
+                    $qa_base_content{$nuc}->{$key} += $value;
+                 }
               }
           } 
           while (my ($key, $value)= each %{$nums_ref->{ReadLen}} )
@@ -411,6 +432,26 @@ my ($phiX_id,$phiX_seq) = &read_phiX174 if ($filter_phiX);
                   print KMEROUT $nums_ref->{trim_seq_num_2},"\n" if ($nums_ref->{trim_file_name_2});
               }
               close KMEROUT; 
+              if ($random_sub_raw_ref)
+              {
+                  while (my ($key, $value)= each %{$random_sub_raw_ref->{ReadLen}} )
+                  {
+		         $qa_len_hash{$key} += $value;   
+                  }
+                  my %qa_temp_avgQ = %{$random_sub_raw_ref->{ReadAvgQ}};
+                  map {$qa_AverageQ{$_}->{bases} += $qa_temp_avgQ{$_}->{basesNum};
+                       $qa_AverageQ{$_}->{reads} += $qa_temp_avgQ{$_}->{readsNum}; 
+                  } keys %qa_temp_avgQ; 
+ 
+                  if ($random_sub_raw_ref->{filter})
+                  {
+                      %filter=%{$random_sub_raw_ref->{filter}};
+                      map {$qa_filter_stats{$_}->{basesNum} += $filter{$_}->{basesNum};
+                           $qa_filter_stats{$_}->{readsNum} += $filter{$_}->{readsNum}; 
+                          } keys %filter; 
+                  }
+              }
+              # print Dumper($random_sub_raw_ref),"\n";
           }
 
           #print $STATS_fh " Processed $total_num/$total_count\n";
@@ -430,7 +471,7 @@ my ($phiX_id,$phiX_seq) = &read_phiX174 if ($filter_phiX);
   {
     next if ($qc_only and ! $random_num_ref->{$i});
     $pm->start($i) and next;
-    my $hash_ref = &qc_process($split_files[$i],$split_files_2[$i]);
+    my $hash_ref = &qc_process($split_files[$i],$split_files_2[$i],$random_num_ref->{$i});
     &run_kmercount($hash_ref,$kmer,1) if ( $random_num_ref->{$i} and $kmer_rarefaction_on );
     &run_kmercount($hash_ref,$kmer,2) if ( $random_num_ref->{$i} and $kmer_rarefaction_on and $split_files_2[$i]);
     $pm->finish(0, $hash_ref);
@@ -484,12 +525,14 @@ if (! $qc_only)
         `rm $outDir/${i_file_name}_?????_trim_unpaired.fastq`;
       }
     }  
+
+&print_quality_report_files($qa_quality_matrix,$qa_avg_quality_histogram,$qa_base_matrix,$qa_nuc_composition_file,$qa_length_histogram,\%qa_position,\%qa_AverageQ,\%qa_base_position,\%qa_base_content,\%qa_len_hash);
 }
 
 
 
 &Kmer_rarefaction() if ($kmer_rarefaction_on); 
-&print_quality_report_files();
+&print_quality_report_files($quality_matrix,$avg_quality_histogram,$base_matrix,$nuc_composition_file,$length_histogram,\%position,\%AverageQ,\%base_position,\%base_content,\%len_hash);
 &print_final_stats();
 &plot_by_R();
 unless ($debug){
@@ -498,6 +541,11 @@ unlink $quality_matrix;
 unlink $base_matrix;
 unlink $avg_quality_histogram;
 unlink $length_histogram;
+unlink $qa_nuc_composition_file;
+unlink $qa_quality_matrix;
+unlink $qa_base_matrix;
+unlink $qa_avg_quality_histogram;
+unlink $qa_length_histogram;
 unlink $kmer_files;
     if ($kmer_rarefaction_on)
     {
@@ -726,11 +774,16 @@ sub print_final_stats{
 
 sub plot_by_R
 {
+
     open (R,">$outDir/tmp$$.R");
     print R <<RSCRIPT; 
 def.par <- par(no.readonly = TRUE) # get default parameters
+if(file.exists(\"$qa_length_histogram\")){
+  pdf(file = \"$plots_file\",width=15,height=7)
+}else{
+  pdf(file = \"$plots_file\",width=10,height=8)
+}
 
-pdf(file = \"$plots_file\",width = 10, height = 8)
 #Summary
 par(family="mono")
 SummaryStats<-readLines("$stats_output")
@@ -740,8 +793,13 @@ if ($qc_only){
      text(0.05,1-0.04*(i-1),SummaryStats[i],adj=0,font=2,cex=1)
   }
 }else{
-  adjust<-11
-  if ($#paired_files > 0) adjust <-14
+  if ($paired_seq_num > 0) {
+      adjust <-14
+      abline(h=0.73,lty=2)
+  }else{
+      adjust<-11
+      abline(h=0.85,lty=2)
+  }
   for (i in 1:length(SummaryStats)){
      if (i>5 && i<adjust){
        text(0.45,1-0.035*(i-6),SummaryStats[i],adj=0,font=2,cex=0.9)
@@ -754,114 +812,171 @@ if ($qc_only){
 }
 #title(paste(\"$prefix\",\"QC report\"),sub = 'DOE Joint Genome Institute/Los Alamos National Laboratory', adj = 0.5, col.sub='darkblue',font.sub=2,cex.sub=0.8)
 title("QC stats")
- 
-par(family="")
+par(def.par)#- reset to default
 
 #lenght histogram
-lengthfile<-read.table(file=\"$length_histogram\")
-lengthList<-as.numeric(lengthfile\$V1)
-lengthCount<-as.numeric(lengthfile\$V2)
-lenAvg<-sum(lengthList * lengthCount)/sum(lengthCount)
-lenStd<-sqrt(sum(((lengthList - lenAvg)**2)*lengthCount)/sum(lengthCount))
-lenMax<-max(lengthList[lengthCount>0])
-lenMin<-min(lengthList[lengthCount>0])
-barplot(lengthCount/1000000,names.arg=lengthList,xlab=\"Length\",ylab=\"Count (millions)\",main=\"Reads Length Histogram\",cex.names=0.8)
-legend.txt<-c(paste(\"Mean\",sprintf (\"%.2f\",lenAvg),\"±\",sprintf (\"%.2f\",lenStd)),paste(\"Max\",lenMax),paste(\"Min\",lenMin))
-legend('topleft',legend.txt,bty='n')
+length_histogram <- function(length_count_file, xlab,ylab){
+  lengthfile<-read.table(file=length_count_file)
+  lengthList<-as.numeric(lengthfile\$V1)
+  lengthCount<-as.numeric(lengthfile\$V2)
+  lenAvg<-sum(lengthList * lengthCount)/sum(lengthCount)
+  lenStd<-sqrt(sum(((lengthList - lenAvg)**2)*lengthCount)/sum(lengthCount))
+  lenMax<-max(lengthList[lengthCount>0])
+  lenMin<-min(lengthList[lengthCount>0])
+  totalReads<-sum(lengthCount)
+  barplot(lengthCount/1000000,names.arg=lengthList,xlab=xlab,ylab=ylab,cex.names=0.8)
+  legend.txt<-c(paste("Mean",sprintf ("%.2f",lenAvg),"±",sprintf ("%.2f",lenStd)),paste("Max",lenMax),paste("Min",lenMin))
+  legend('topleft',legend.txt,bty='n')
+  if (totalReads< $trimmed_num){
+      mtext(side=3,paste(\"(Sampling\",formatC(totalReads/1000000,digits=3),\"M Reads)\"),adj=0)
+  }
+  return(totalReads)
+}
+if(file.exists(\"$qa_length_histogram\")){
+    par(mfrow=c(1,2))
+    qa.readsCount<-length_histogram(\"$qa_length_histogram\","Input Length","Count (millions)")
+    readsCount<-length_histogram(\"$length_histogram\","Trimmed Length","")
+}else{
+    readsCount<-length_histogram(\"$length_histogram\","Length","Count (millions)")
+}
+par(def.par)#- reset to default
+title("Reads Length Histogram")
 
 #readGC plot
-baseP<-read.table(file=\"$nuc_composition_file\")
-Apercent<-baseP\$V2[which(baseP\$V1==\"A\")]
-ApercentCount<-baseP\$V3[which(baseP\$V1==\"A\")]
-Tpercent<-baseP\$V2[which(baseP\$V1==\"T\")]
-TpercentCount<-baseP\$V3[which(baseP\$V1==\"T\")]
-Cpercent<-baseP\$V2[which(baseP\$V1==\"C\")]
-CpercentCount<-baseP\$V3[which(baseP\$V1==\"C\")]
-Gpercent<-baseP\$V2[which(baseP\$V1==\"G\")]
-GpercentCount<-baseP\$V3[which(baseP\$V1==\"G\")]
-#Npercent<-baseP\$V2[which(baseP\$V1==\"N\")]
-#NpercentCount<-baseP\$V3[which(baseP\$V1==\"N\")]
-GCpercent<-baseP\$V2[which(baseP\$V1==\"GC\")]
-GCpercentCount<-baseP\$V3[which(baseP\$V1==\"GC\")]
-aAvg<-sum(Apercent * ApercentCount)/sum(ApercentCount)
-aStd<-sqrt(sum(((Apercent - aAvg)**2)*ApercentCount)/sum(ApercentCount))
-tAvg<-sum(Tpercent * TpercentCount)/sum(TpercentCount)
-tStd<-sqrt(sum(((Tpercent - tAvg)**2)*TpercentCount)/sum(TpercentCount))
-cAvg<-sum(Cpercent * CpercentCount)/sum(CpercentCount)
-cStd<-sqrt(sum(((Cpercent - cAvg)**2)*CpercentCount)/sum(CpercentCount))
-gAvg<-sum(Gpercent * GpercentCount)/sum(GpercentCount)
-gStd<-sqrt(sum(((Gpercent - gAvg)**2)*GpercentCount)/sum(GpercentCount))
-#nAvg<-sum(Npercent * NpercentCount)/sum(NpercentCount)
-#nStd<-sqrt(sum(((Npercent - nAvg)**2)*NpercentCount)/sum(NpercentCount))
-gcAvg<-sum(GCpercent * GCpercentCount)/sum(GCpercentCount)
-gcStd<-sqrt(sum(((GCpercent - gcAvg)**2)*GCpercentCount)/sum(GCpercentCount))
-GCaggregate<-tapply(GCpercentCount,list(cut(GCpercent,breaks=c(seq(0,100,1)))),FUN=sum)
-Aaggregate<-tapply(ApercentCount,list(cut(Apercent,breaks=c(seq(0,100,1)))),FUN=sum)
-Taggregate<-tapply(TpercentCount,list(cut(Tpercent,breaks=c(seq(0,100,1)))),FUN=sum)
-Caggregate<-tapply(CpercentCount,list(cut(Cpercent,breaks=c(seq(0,100,1)))),FUN=sum)
-Gaggregate<-tapply(GpercentCount,list(cut(Gpercent,breaks=c(seq(0,100,1)))),FUN=sum)
 
+readGC_plot <- function(base_content_file, totalReads, fig_x_start,fig_x_end,xlab,ylab,new){
+	baseP<-read.table(file=base_content_file)
+	Apercent<-baseP\$V2[which(baseP\$V1=="A")]
+	ApercentCount<-baseP\$V3[which(baseP\$V1=="A")]
+	Tpercent<-baseP\$V2[which(baseP\$V1=="T")]
+	TpercentCount<-baseP\$V3[which(baseP\$V1=="T")]
+	Cpercent<-baseP\$V2[which(baseP\$V1=="C")]
+	CpercentCount<-baseP\$V3[which(baseP\$V1=="C")]
+	Gpercent<-baseP\$V2[which(baseP\$V1=="G")]
+	GpercentCount<-baseP\$V3[which(baseP\$V1=="G")]
+	#Npercent<-baseP\$V2[which(baseP\$V1=="N")]
+	#NpercentCount<-baseP\$V3[which(baseP\$V1=="N")]
+	GCpercent<-baseP\$V2[which(baseP\$V1=="GC")]
+	GCpercentCount<-baseP\$V3[which(baseP\$V1=="GC")]
+	aAvg<-sum(Apercent * ApercentCount)/sum(ApercentCount)
+	aStd<-sqrt(sum(((Apercent - aAvg)**2)*ApercentCount)/sum(ApercentCount))
+	tAvg<-sum(Tpercent * TpercentCount)/sum(TpercentCount)
+	tStd<-sqrt(sum(((Tpercent - tAvg)**2)*TpercentCount)/sum(TpercentCount))
+	cAvg<-sum(Cpercent * CpercentCount)/sum(CpercentCount)
+	cStd<-sqrt(sum(((Cpercent - cAvg)**2)*CpercentCount)/sum(CpercentCount))
+	gAvg<-sum(Gpercent * GpercentCount)/sum(GpercentCount)
+	gStd<-sqrt(sum(((Gpercent - gAvg)**2)*GpercentCount)/sum(GpercentCount))
+	#nAvg<-sum(Npercent * NpercentCount)/sum(NpercentCount)
+	#nStd<-sqrt(sum(((Npercent - nAvg)**2)*NpercentCount)/sum(NpercentCount))
+	gcAvg<-sum(GCpercent * GCpercentCount)/sum(GCpercentCount)
+	gcStd<-sqrt(sum(((GCpercent - gcAvg)**2)*GCpercentCount)/sum(GCpercentCount))
+	GCaggregate<-tapply(GCpercentCount,list(cut(GCpercent,breaks=c(seq(0,100,1)))),FUN=sum)
+	Aaggregate<-tapply(ApercentCount,list(cut(Apercent,breaks=c(seq(0,100,1)))),FUN=sum)
+	Taggregate<-tapply(TpercentCount,list(cut(Tpercent,breaks=c(seq(0,100,1)))),FUN=sum)
+	Caggregate<-tapply(CpercentCount,list(cut(Cpercent,breaks=c(seq(0,100,1)))),FUN=sum)
+	Gaggregate<-tapply(GpercentCount,list(cut(Gpercent,breaks=c(seq(0,100,1)))),FUN=sum)
 
-par(fig=c(0,0.75,0,1),mar=c(5,4,4,2),xpd=FALSE,cex.main=1.2)
-plot(GCaggregate/1000000,xlim=c(0,100),type=\"h\",lwd=4, main=\"Reads GC content\",xlab=\"GC (%)\",ylab=\"Number of reads (millions)\",lend=2)
-legend.txt<-c(paste(\"GC\",sprintf (\"%.2f%%\",gcAvg),\"±\",sprintf (\"%.2f\",gcStd)))
-legend('topright',legend.txt,bty='n')
+	par(fig=c(fig_x_start,(fig_x_end-fig_x_start)*0.75+fig_x_start,0,1),mar=c(5,4,4,2),xpd=FALSE,cex.main=1.2,new=new)
+	plot(GCaggregate/1000000,xlim=c(0,100),type="h",lwd=4,xlab=paste(xlab,"GC (%)"),ylab=ylab,lend=2)
+	legend.txt<-c(paste("GC",sprintf ("%.2f%%",gcAvg),"±",sprintf ("%.2f",gcStd)))
+	legend('topright',legend.txt,bty='n')
+	if (totalReads< $trimmed_num){
+            mtext(side=3,paste(\"(Sampling\",formatC(totalReads/1000000,digits=3),\"M Reads)\"),adj=0)
+        }
 
-par(fig=c(0.75,1,0.75,1), mar=c(3, 2, 2, 2),new=TRUE,cex.main=1)
-legend.txt<-c(paste(\"A\",sprintf (\"%.2f%%\",aAvg),\"±\",sprintf (\"%.2f\",aStd)))
-plot(Aaggregate/1000000,xlim=c(0,50),type=\"h\",lwd=2,main=legend.txt,xlab="",ylab="",)
+	par(fig=c((fig_x_end-fig_x_start)*0.75+fig_x_start,fig_x_end,0.75,1), mar=c(3, 2, 2, 2),new=TRUE,cex.main=1)
+	legend.txt<-c(paste("A",sprintf ("%.2f%%",aAvg),"±",sprintf ("%.2f",aStd)))
+	plot(Aaggregate/1000000,xlim=c(0,50),type="h",lwd=2,main=legend.txt,xlab="",ylab="",)
 
-par(fig=c(0.75,1,0.5,0.75),mar=c(3, 2, 2, 2),new=TRUE)
-legend.txt<-c(paste(\"T\",sprintf (\"%.2f%%\",tAvg),\"±\",sprintf (\"%.2f\",tStd)))
-plot(Taggregate/1000000,xlim=c(0,50),type=\"h\",lwd=2,main=legend.txt,xlab="",ylab="")
+	par(fig=c((fig_x_end-fig_x_start)*0.75+fig_x_start,fig_x_end,0.5,0.75),mar=c(3, 2, 2, 2),new=TRUE)
+	legend.txt<-c(paste("T",sprintf ("%.2f%%",tAvg),"±",sprintf ("%.2f",tStd)))
+	plot(Taggregate/1000000,xlim=c(0,50),type="h",lwd=2,main=legend.txt,xlab="",ylab="")
 
-par(fig=c(0.75,1,0.25,0.5),mar=c(3, 2, 2, 2),new=TRUE)
-legend.txt<-c(paste(\"C\",sprintf (\"%.2f%%\",cAvg),\"±\",sprintf (\"%.2f\",cStd)))
-plot(Caggregate/1000000,xlim=c(0,50),type=\"h\",lwd=2,main=legend.txt,xlab="",ylab="")
+	par(fig=c((fig_x_end-fig_x_start)*0.75+fig_x_start,fig_x_end,0.25,0.5),mar=c(3, 2, 2, 2),new=TRUE)
+	legend.txt<-c(paste("C",sprintf ("%.2f%%",cAvg),"±",sprintf ("%.2f",cStd)))
+	plot(Caggregate/1000000,xlim=c(0,50),type="h",lwd=2,main=legend.txt,xlab="",ylab="")
 
-par(fig=c(0.75,1,0,0.25),mar=c(3, 2, 2, 2),new=TRUE)
-legend.txt<-c(paste(\"G\",sprintf (\"%.2f%%\",gAvg),\"±\",sprintf (\"%.2f\",gStd)))
-plot(Gaggregate/1000000,xlim=c(0,50),type=\"h\",lwd=2,main=legend.txt,xlab="",ylab="")
+	par(fig=c((fig_x_end-fig_x_start)*0.75+fig_x_start,fig_x_end,0,0.25),mar=c(3, 2, 2, 2),new=TRUE)
+	legend.txt<-c(paste("G",sprintf ("%.2f%%",gAvg),"±",sprintf ("%.2f",gStd)))
+	plot(Gaggregate/1000000,xlim=c(0,50),type="h",lwd=2,main=legend.txt,xlab="",ylab="")
+}
+if(file.exists(\"$qa_nuc_composition_file\")){
+    readGC_plot(\"$qa_nuc_composition_file\",qa.readsCount,0,0.5,"Input Reads","Number of reads (millions)",FALSE)
+    readGC_plot(\"$nuc_composition_file\",readsCount,0.5,1,"Trimmed Reads","",TRUE)
+    #abline(v=0.5,lty=2,xpd=TRUE)
+} else {
+    readGC_plot(\"$nuc_composition_file\",readsCount,0,1,"","Number of reads (millions)",FALSE)
+}
 par(def.par)#- reset to default
+title("Reads GC content",adj=0)
 
 
 #ATCG composition per base ATCG plot
 baseM<-read.table(file=\"$base_matrix\")
-aBase<-baseM\$V1
-tBase<-baseM\$V2
-cBase<-baseM\$V3
-gBase<-baseM\$V4
-nBase<-baseM\$V5
+ATCG_composition_plot <- function(base_matrix_file,totalReads,xlab,ylab) {
+	baseM<-read.table(file=base_matrix_file)
+	aBase<-baseM\$V1
+	tBase<-baseM\$V2
+	cBase<-baseM\$V3
+	gBase<-baseM\$V4
+	nBase<-baseM\$V5
 
-aPer<-(aBase/rowSums(baseM))*100
-tPer<-(tBase/rowSums(baseM))*100
-cPer<-(cBase/rowSums(baseM))*100
-gPer<-(gBase/rowSums(baseM))*100
+	aPer<-(aBase/rowSums(baseM))*100
+	tPer<-(tBase/rowSums(baseM))*100
+	cPer<-(cBase/rowSums(baseM))*100
+	gPer<-(gBase/rowSums(baseM))*100
 
-xpos<-seq(1,length(aBase),1)
-plot(xpos,aPer,col=\'green3\',type=\'l\',xaxt=\'n\',xlab=\'Base\',ylab=\'Base content (%)\',ylim=c(1,100))
-lines(xpos,tPer,col=\'red\')
-lines(xpos,cPer,col=\'blue\')
-lines(xpos,gPer,col=\'black\')
-axis(1,at=xpos,labels=xpos)
-legend(\'topright\',c(\'A\',\'T\',\'C\',\'G\'),col=c(\'green3\',\'red\',\'blue\',\'black\'),box.col=0,lwd=1)
-title(\"Nucleotide Content Per Cycle\")
-
-if ($N_num_cutoff >0){
-#N composition per Base plot
-plot(xpos,nBase/$trimmed_num*1000000,col=\'red\',type=\'l\',xaxt=\'n\',xlab=\'Position\',ylab=\'N Base count per million reads\',ylim=c(0,max(nBase/$trimmed_num*1000000)))
-axis(1,at=xpos,labels=xpos)
-legend(\'topright\',paste(\"Total bases: \",sum(nBase)),bty='n')
-title(\"N Nucleotide Content Per Cycle\")
+	xpos<-seq(1,length(aBase),1)
+	plot(xpos,aPer,col='green3',type='l',xaxt='n',xlab=xlab,ylab=ylab ,ylim=c(1,100))
+	lines(xpos,tPer,col='red')
+	lines(xpos,cPer,col='blue')
+	lines(xpos,gPer,col='black')
+	axis(1,at=xpos,labels=xpos)
+	legend('topright',c('A','T','C','G'),col=c('green3','red','blue','black'),box.col=0,lwd=1)
+	if (totalReads< $trimmed_num){
+            mtext(side=3,paste(\"(Sampling\",formatC(totalReads/1000000,digits=3),\"M Reads)\"),adj=0)
+        }
+	return(nBase)
 }
+if(file.exists(\"$qa_base_matrix\")){
+    par(mfrow=c(1,2))
+    qa.nBase<-ATCG_composition_plot(\"$qa_base_matrix\",qa.readsCount,"Input Reads Base",'Base content (%)')
+    nBase<-ATCG_composition_plot(\"$base_matrix\",readsCount,"Trimmed Reads Base","")
+}else{
+    nBase<-ATCG_composition_plot(\"$base_matrix\",readsCount,"",'Base content (%)')
+}
+par(def.par)#- reset to default
+title("Nucleotide Content Per Cycle")
 
+
+#N composition per Base plot
+N_composition_plot<-function(BaseArray,totalReads,xlab,ylab){
+  xpos<-seq(1,length(BaseArray),1)
+  plot(xpos,BaseArray/totalReads*1000000,col='red',type='l',xaxt='n',xlab=xlab,ylab=ylab,ylim=c(0,max(BaseArray/totalReads*1000000)))
+  axis(1,at=xpos,labels=xpos)
+  legend('topright',paste("Total bases: ",sum(BaseArray)),bty='n')
+  if (totalReads< $trimmed_num){
+      mtext(side=3,paste(\"(Sampling\",formatC(totalReads/1000000,digits=3),\"M Reads)\"),adj=0)
+  }
+}
+if (sum(nBase) >0){
+  if(file.exists(\"$qa_base_matrix\")){
+    par(mfrow=c(1,2))
+    N_composition_plot(qa.nBase,qa.readsCount,"Input reads Position","N Base count per million reads")
+    N_composition_plot(nBase,readsCount,"Trimmed reads Position","")
+  }else{
+    N_composition_plot(nBase,readsCount,"Position","N Base count per million reads")
+  } 
+}
+par(def.par)#- reset to default
+title("N Nucleotide Content Per Cycle")
 
 if(file.exists(\"$kmer_rarefaction_file\")){
 
 kmerfile<-read.table(file=\"$kmer_rarefaction_file\")
 sampling_size<-sum(kmerfile\$V1)
 sampling<-""
-if(sampling_size<$trimmed_num){
+if(sampling_size< $trimmed_num){
     sampling<-paste(\"(Sampling\",format(sampling_size/1000000,digit=3),\"M Reads)\")
 }
 cumSeqNum<-cumsum(kmerfile\$V1);
@@ -894,107 +1009,168 @@ par(def.par)#- reset to default
 
 }
 
-
 # read avg quality count barplot 
-Qhist_file<-read.table(file=\"$avg_quality_histogram\",header=TRUE)
-par(mar=c(5,4,4,4))
-cumulate<-cumsum(Qhist_file\$readsNum)
-plot(Qhist_file\$Score,Qhist_file\$readsNum/1000000,type=\'h\',xlim=c(max(Qhist_file\$Score),min(Qhist_file\$Score)),xlab=\"Avg Score\", ylab=\"Reads Number (millions)\",lwd=12,lend=2)
-title('Reads Average Quality Histogram')
-par(new=TRUE)
-plot(Qhist_file\$Score,cumulate/sum(Qhist_file\$readsNum)*100,type='l',xlim=c(max(Qhist_file\$Score),min(Qhist_file\$Score)),yaxt='n',xaxt='n',ylab="",xlab="",col='blue',lwd=3)
-axis(4,col='blue',col.ticks='blue',col.axis='blue')
-mtext(side=4,'Cumulative Percentage',line=2,col='blue')
-Qover20Reads<-sum(as.numeric(Qhist_file\$readsNum[Qhist_file\$Score>=20]))
-Qover20ReadsPer<-sprintf(\"%.2f%%\",Qover20Reads/sum(Qhist_file\$readsNum)*100)
-Qover20Bases<-sum(as.numeric(Qhist_file\$readsBases[Qhist_file\$Score>=20]))
-Qover20AvgLen<-sprintf(\"%.2f\",Qover20Bases/Qover20Reads)
-mtext(side=3,paste(\"Number of Q>=20 reads:\",prettyNum(Qover20Reads,big.mark=\",\"),\"(\",Qover20ReadsPer,\")\",\", mean Length:\",Qover20AvgLen),adj=0,cex=0.8,line=0.5)
+quality_histogram<-function(qual_histogram_file,totalReads,xlab,ylab){
+	Qhist_file<-read.table(file=qual_histogram_file,header=TRUE)
+	cumulate<-cumsum(Qhist_file\$readsNum)
+	par(mar=c(5,4,5,4))
+	if (missing(ylab)){ylab2<-""} else {ylab2<-ylab}
+	plot(Qhist_file\$Score,Qhist_file\$readsNum/1000000,type='h',xlim=c(max(Qhist_file\$Score),min(Qhist_file\$Score)),xlab=xlab, ylab=ylab2,lwd=12,lend=2)
+	par(new=TRUE)
+	plot(Qhist_file\$Score,cumulate/sum(Qhist_file\$readsNum)*100,type='l',xlim=c(max(Qhist_file\$Score),min(Qhist_file\$Score)),yaxt='n',xaxt='n',ylab="",xlab="",col='blue',lwd=3)
+	axis(4,col='blue',col.ticks='blue',col.axis='blue')
+	if (missing(ylab)){
+	  mtext(side=4,'Cumulative Percentage',line=2,col='blue')
+	}
+	Qover20Reads<-sum(as.numeric(Qhist_file\$readsNum[Qhist_file\$Score>=20]))
+	Qover20ReadsPer<-sprintf("%.2f%%",Qover20Reads/sum(Qhist_file\$readsNum)*100)
+	Qover20Bases<-sum(as.numeric(Qhist_file\$readsBases[Qhist_file\$Score>=20]))
+	Qover20AvgLen<-sprintf("%.2f",Qover20Bases/Qover20Reads)
+	TotalBases<-sum(as.numeric(Qhist_file\$readsBases))
+	mtext(side=3,paste("Number of Q>=20 reads:",formatC(Qover20Reads,format="d",big.mark=","),"(",Qover20ReadsPer,")",", mean Length:",Qover20AvgLen),adj=0,cex=0.8,line=0.3)
+	if (totalReads< $trimmed_num){
+           mtext(side=3,paste(\"(Sampling\",formatC(totalReads/1000000,digits=3),\"M Reads)\"),line=1,adj=0,cex=0.8)
+        }
+    return(TotalBases)
+}
+if(file.exists(\"$qa_avg_quality_histogram\"))
+{
+    par(mfrow=c(1,2))
+    qa.totalBases<-quality_histogram(\"$qa_avg_quality_histogram\",qa.readsCount,"Input Reads Avg Score","Reads Number (millions)")
+    totalBases<-quality_histogram(\"$avg_quality_histogram\",readsCount,"Trimmed Reads Avg Score")
+}else{
+    totalBases<-quality_histogram(\"$avg_quality_histogram\",readsCount,"Avg Score","Reads Number (millions)")
+}
 par(def.par)#- reset to default
-
+title('Reads Average Quality Histogram')
 
 # read in matrix file for the following three plots
-z<-as.matrix(read.table(file=\"$quality_matrix\"));
-x<-1:nrow(z)
-y<-1:ncol(z)
-y<-y-1
+quality_boxplot<-function(quality_matrix_file,totalReads,totalBases,xlab,ylab){
+	z<-as.matrix(read.table(file=quality_matrix_file))
+	x<-1:nrow(z)
+	y<-1:ncol(z)
+	y<-y-1
 
-#quality boxplot per base
-is.wholenumber <- function(x, tol = .Machine\$double.eps^0.5)  abs(x - round(x)) < tol
-plot(1:length(x),x,type=\'n\',xlab=\"Position\",ylab=\"Quality score\", ylim=c(0,max(y)+1),xaxt=\'n\')
-axis(1,at=x,labels=TRUE)
-title(\"Quality Boxplot Per Cycle\")
+	#quality boxplot per base
+	is.wholenumber <- function(x, tol = .Machine\$double.eps^0.5)  abs(x - round(x)) < tol
+	plot(1:length(x),x,type='n',xlab=xlab,ylab=ylab, ylim=c(0,max(y)+1),xaxt='n')
+	axis(1,at=x,labels=TRUE)
 
-for (i in 1:length(x)) {
-  total<-sum(z[i,])
-  qAvg<-sum(y*z[i,])/total
-  if (is.wholenumber(total/2))
-  {
-     med<-( min(y[cumsum((z[i,]))>=total/2]) + min(y[cumsum((z[i,]))>=total/2+1]) )/2
-  }
-  else
-  {
-     med<-min(y[cumsum((z[i,]))>=ceiling(total/2)])
-  }
+	for (i in 1:length(x)) {
+	  total<-sum(z[i,])
+	  qAvg<-sum(y*z[i,])/total
+	  if (is.wholenumber(total/2))
+	  {
+		 med<-( min(y[cumsum((z[i,]))>=total/2]) + min(y[cumsum((z[i,]))>=total/2+1]) )/2
+	  }
+	  else
+	  {
+		 med<-min(y[cumsum((z[i,]))>=ceiling(total/2)])
+	  }
 
-  if (is.wholenumber(total/4))
-  {
-     Q1<-( min(y[cumsum((z[i,]))>=total/4]) + min(y[cumsum((z[i,]))>=total/4+1]) )/2
-  }
-  else
-  {
-     Q1<-min(y[cumsum((z[i,]))>=round(total/4)])
-  }
+	  if (is.wholenumber(total/4))
+	  {
+		 Q1<-( min(y[cumsum((z[i,]))>=total/4]) + min(y[cumsum((z[i,]))>=total/4+1]) )/2
+	  }
+	  else
+	  {
+		 Q1<-min(y[cumsum((z[i,]))>=round(total/4)])
+	  }
 
-  if (is.wholenumber(total/4*3))
-  {
-     Q3<-( min(y[cumsum((z[i,]))>=total/4*3]) + min(y[cumsum((z[i,]))>=total/4*3+1]) )/2
-  }
-  else
-  {
-     Q3<-min(y[cumsum((z[i,]))>=round(total/4*3)])
-  }
-  maxi<-max(y[z[i,]>0])
-  mini<-min(y[z[i,]>0])
-  #if (Q1 == 'Inf') {Q1 = maxi}
-  if (Q3 == \'Inf\') {Q3 = maxi}
-  IntQ<-Q3-Q1
-  mini<-max(mini,Q1-1.5*IntQ)
-  maxi<-min(maxi,Q3+1.5*IntQ)
-  rect(i-0.4,Q1,i+0.4,Q3,col=\'bisque\')
-  lines(c(i,i),c(Q3,maxi),lty=2)
-  lines(c(i,i),c(mini,Q1),lty=2)
-  lines(c(i-0.4,i+0.4),c(mini,mini))
-  lines(c(i-0.4,i+0.4),c(maxi,maxi))
-  lines(c(i-0.4,i+0.4),c(med,med))
-  #points(i,qAvg,col=\'red\')
-  reads_num<-prettyNum($trimmed_num,big.mark=",")
-  reads_base<-prettyNum($total_trimmed_seq_len,big.mark=",")
-  abline(h=20, col = \"gray60\")
-  legend(\"bottomleft\",c(paste(\"# Reads: \",reads_num),paste(\"# Bases:\",reads_base)))
-## for outliers
-#points()
+	  if (is.wholenumber(total/4*3))
+	  {
+		 Q3<-( min(y[cumsum((z[i,]))>=total/4*3]) + min(y[cumsum((z[i,]))>=total/4*3+1]) )/2
+	  }
+	  else
+	  {
+		 Q3<-min(y[cumsum((z[i,]))>=round(total/4*3)])
+	  }
+	  maxi<-max(y[z[i,]>0])
+	  mini<-min(y[z[i,]>0])
+	  #if (Q1 == 'Inf') {Q1 = maxi}
+	  if (Q3 == 'Inf') {Q3 = maxi}
+	  IntQ<-Q3-Q1
+	  mini<-max(mini,Q1-1.5*IntQ)
+	  maxi<-min(maxi,Q3+1.5*IntQ)
+	  rect(i-0.4,Q1,i+0.4,Q3,col='bisque')
+	  lines(c(i,i),c(Q3,maxi),lty=2)
+	  lines(c(i,i),c(mini,Q1),lty=2)
+	  lines(c(i-0.4,i+0.4),c(mini,mini))
+	  lines(c(i-0.4,i+0.4),c(maxi,maxi))
+	  lines(c(i-0.4,i+0.4),c(med,med))
+	  #points(i,qAvg,col='red')
+	  reads_num<-formatC(totalReads,format="d",big.mark=",")
+	  reads_base<-formatC(totalBases,format="d",big.mark=",")
+	  abline(h=20, col = "gray60")
+	  legend("bottomleft",c(paste("# Reads: ",reads_num),paste("# Bases:",reads_base)))
+	  if (totalReads< $trimmed_num){
+              mtext(side=3,paste(\"(Sampling\",formatC(totalReads/1000000,digits=3),\"M Reads)\"),adj=0)
+          }
+	## for outliers
+	#points()
+	}
 }
+if (file.exists(\"$qa_quality_matrix\")){
+    par(mfrow=c(1,2))
+    quality_boxplot(\"$qa_quality_matrix\",qa.readsCount,qa.totalBases,"Input Reads Position","Quality score")
+    quality_boxplot(\"$quality_matrix\",readsCount,totalBases,"Trimmed Reads Position","")
+}else{
+    quality_boxplot(\"$quality_matrix\",readsCount,totalBases,"Position","Quality score")
+}
+par(def.par)#- reset to default
+title("Quality Boxplot Per Cycle")
 
 #quality 3D plot
-persp(x,y,z/1000000,theta = 50, phi = 30, expand = 0.7, col = \"#0000ff22\",ntick=10,ticktype=\"detailed\",xlab=\'Position\',ylab=\'Score\',zlab=\"\",r=6,shade=0.75)
-mtext(side=2, \"Frequency (millions)\",line=2)
-title(\"Quality 3D plot. (Position vs. Score vs. Frequency)\")
+quality_3d_plot<-function(quality_matrix_file,totalReads,xlab,ylab){
+	z<-as.matrix(read.table(file=quality_matrix_file))
+	x<-1:nrow(z)
+	y<-1:ncol(z)
+	y<-y-1
+    persp(x,y,z/1000000,theta = 50, phi = 30, expand = 0.7, col = "#0000ff22",ntick=10,ticktype="detailed",xlab=xlab,ylab=ylab,zlab="",r=6,shade=0.75)
+    mtext(side=2, "Frequency (millions)",line=2)
+	if (totalReads< $trimmed_num){
+            mtext(side=3,paste(\"(Sampling\",formatC(totalReads/1000000,digits=3),\"M Reads)\"),adj=0)
+        }
+}
+if (file.exists(\"$qa_quality_matrix\")){
+    par(mfrow=c(1,2))
+    quality_3d_plot(\"$qa_quality_matrix\",qa.readsCount,"Input Reads Position","Q Score")
+    quality_3d_plot(\"$quality_matrix\",readsCount,"Trimmed Reads Position","Q Score")
+}else{
+    quality_3d_plot(\"$quality_matrix\",readsCount,"Position","Q Score")
+}
+par(def.par)#- reset to default
+title("Quality 3D plot. (Position vs. Score vs. Frequency)")
 
 #Quality count bar plot
-col<-colSums(z)
-less30columnNum<-length(col)-$highest_illumina_score+30-1
-atleast30columnNum<-$highest_illumina_score-30+1
-color<-c(rep(\'blue\',less30columnNum),rep(\'darkgreen\',atleast30columnNum))
-over30per<-sprintf(\"%.2f%%\",sum(col[(less30columnNum+1):length(col)])/sum(col)*100)
-countInM<-col/1000000
-avgQ<-sprintf(\"%.2f\",sum(seq(0,41,1)*col)/sum(col))
-plot(seq($lowest_illumina_score,$highest_illumina_score,1),countInM,col=color,type='h',ylab=\"Total (million)\",xlab=\"Q score\",lwd=12,lend=2,bty='n')
-abline(v=29.5,col='darkgreen')
-text(30,(max(countInM)-min(countInM))*0.9,labels=\">=Q30\",cex=0.8,adj=0,col=\'darkgreen\')
-text(30,(max(countInM)-min(countInM))*0.85,labels=over30per,cex=0.8,adj=0,col=\'darkgreen\')
-legend('topleft',paste(\"Average: \",avgQ),bty='n')
-title(\"Quality report\")
+upper_limit<-41
+quality_count_histogram<-function(quality_matrix_file,totalReads,highestScore,xlab,ylab){
+    z<-as.matrix(read.table(file=quality_matrix_file));
+    col<-colSums(z)
+    less30columnNum<-length(col)-highestScore+30-1
+    atleast30columnNum<-highestScore-30+1
+    color<-c(rep('blue',less30columnNum),rep('darkgreen',atleast30columnNum))
+    over30per<-sprintf("%.2f%%",sum(col[(less30columnNum+1):length(col)])/sum(col)*100)
+    countInM<-col/1000000
+    avgQ<-sprintf("%.2f",sum(seq(0,41,1)*col)/sum(col))
+    plot(seq(0,highestScore,1),countInM,col=color,type='h',ylab=ylab,xlab=xlab,lwd=12,lend=2,bty='n')
+    abline(v=29.5,col='darkgreen')
+    text(30,(max(countInM)-min(countInM))*0.9,labels=">=Q30",cex=0.8,adj=0,col='darkgreen')
+    text(30,(max(countInM)-min(countInM))*0.85,labels=over30per,cex=0.8,adj=0,col='darkgreen')
+    mtext(side=3,paste("Average: ",avgQ),adj=0)
+	if (totalReads< $trimmed_num){
+            mtext(side=3,paste(\"(Sampling\",formatC(totalReads/1000000,digits=3),\"M Reads)\"),line=1 ,adj=0)
+        }
+}
+if (file.exists(\"$qa_quality_matrix\")){
+    par(mfrow=c(1,2))
+    quality_count_histogram(\"$qa_quality_matrix\",qa.readsCount,upper_limit,"Input Reads Q score","Total (million)")
+    quality_count_histogram(\"$quality_matrix\",readsCount,upper_limit,"Trimmed Reads Q score","")
+}else{
+    quality_count_histogram(\"$quality_matrix\",readsCount,upper_limit,"Q score","Total (million)")
+}
+par(def.par)#- reset to default
+title("Quality report")
 
 tmp<-dev.off()
 
@@ -1010,15 +1186,25 @@ RSCRIPT
 }
 
 sub print_quality_report_files{
+    my $quality_matrix=shift;
+    my $avg_quality_histogram=shift;
+    my $base_matrix=shift;
+    my $nuc_composition_file=shift;
+    my $length_histogram=shift;
+    my $position_r=shift;
+    my $AverageQ_r=shift;
+    my $base_position_r=shift;
+    my $base_content_r=shift;
+    my $len_hash_r=shift;
     open (OUT, ">$quality_matrix");
     open (BASE, ">$base_matrix");
-    foreach my $pos2(sort {$a<=>$b} keys %position){
+    foreach my $pos2(sort {$a<=>$b} keys %{$position_r}){
         my $q_string;
         my $n_string;
         for ($lowest_illumina_score..$highest_illumina_score)
         {
-            if ($position{$pos2}->{$_}){
-              $q_string .=  $position{$pos2}->{$_}."\t";
+            if ($position_r->{$pos2}->{$_}){
+              $q_string .=  $position_r->{$pos2}->{$_}."\t";
             }
             else
             {
@@ -1027,8 +1213,8 @@ sub print_quality_report_files{
         }
         for my $base ("A","T","C","G","N")
         { 
-            if ($base_position{$pos2}->{$base}){
-              $n_string .= $base_position{$pos2}->{$base}."\t";
+            if ($base_position_r->{$pos2}->{$base}){
+              $n_string .= $base_position_r->{$pos2}->{$base}."\t";
             }
             else
             {
@@ -1048,9 +1234,9 @@ sub print_quality_report_files{
     my $h_print_string;
     while ($Key >= 0)
     {
-        if(defined $AverageQ{$Key}->{reads}){
+        if(defined $AverageQ_r->{$Key}->{reads}){
            $h_print_string .= "$Key\t".
-           $AverageQ{$Key}->{reads}. "\t".$AverageQ{$Key}->{bases}."\n";
+           $AverageQ_r->{$Key}->{reads}. "\t".$AverageQ_r->{$Key}->{bases}."\n";
         }else{
            $h_print_string .= "$Key\t".
               "0\t".
@@ -1063,6 +1249,7 @@ sub print_quality_report_files{
     close OUT2;
 
     open (OUT3, ">$nuc_composition_file");
+    my %base_content=%{$base_content_r};
     for my $nuc ("A","T","C","G","N","GC")
     {
       foreach my $key ( sort {$a<=>$b} keys %{$base_content{$nuc}})
@@ -1073,17 +1260,17 @@ sub print_quality_report_files{
     close OUT3;
  
     open (OUT4,">$length_histogram");
-	my @len_list= sort {$a<=>$b} keys %len_hash;
+	my @len_list= sort {$a<=>$b} keys %{$len_hash_r};
     for my $key (1..$len_list[-1])
     {
-	    if ($len_hash{$key}) 
-		{
-            print OUT4 "$key\t$len_hash{$key}\n";
-		}
-		else
-		{
-			print OUT4 "$key\t0\n";
-		}
+	if ($len_hash_r->{$key}) 
+        {
+            print OUT4 "$key\t$len_hash_r->{$key}\n";
+	}
+	else
+	{
+	    print OUT4 "$key\t0\n";
+	}
     }
     close OUT4;
 }
@@ -1099,12 +1286,13 @@ sub file_check
 }
 
 sub qc_process {
-  my ($input, $input2) = @_;
+  my ($input, $input2,$random_select_file_flag) = @_;
   my ($h1,$s,$s_trimmed,$h2,$q, $q_trimmed); my $len=0; my $trim_len=0;
   my ($r2_h1,$r2_s,$r2_s_trimmed,$r2_h2,$r2_q,$r2_q_trimmed); my $r2_len=0; my $r2_trim_len=0;
   my %stats;
+  my %random_sub_stats;
   $stats{filter}->{adapter}->{readsNum}=0;
-  my $seq_r;
+  my ($seq_r,$random_sub_seq_r);;
   my $avg_q;
   my ($pos5,$pos3);
   my ($raw_seq_num_1,$raw_seq_num_2,$total_raw_seq_len);
@@ -1223,10 +1411,16 @@ sub qc_process {
            }
            $drop_1=0 if ($qc_only);
         }
+        if ($random_select_file_flag and !$qc_only)
+        {
+            my ($tmp1,$tmp2);
+            ($random_sub_seq_r,$tmp1,$tmp2)=&get_base_and_quality_info($s,$q,$len,0,$len+1,\%random_sub_stats,1);
+            %random_sub_stats=%{$random_sub_seq_r};
+        }
         if ($drop_1==0)
         {
           #     print "drop1\t",$drop_1,"\t";
-            ($seq_r,$drop_1,$s_trimmed)=&get_base_and_quality_info($s_trimmed,$q_trimmed,$trim_len,$pos5,$pos3,\%stats);
+            ($seq_r,$drop_1,$s_trimmed)=&get_base_and_quality_info($s_trimmed,$q_trimmed,$trim_len,$pos5,$pos3,\%stats,$qc_only);
             %stats=%{$seq_r};
          #   print $drop_1,"\n";
         }
@@ -1324,10 +1518,16 @@ sub qc_process {
                }
                $drop_2=0 if ($qc_only);
            }
+           if ($random_select_file_flag and !$qc_only)
+           {
+               my ($tmp1,$tmp2);
+               ($random_sub_seq_r,$tmp1,$tmp2)=&get_base_and_quality_info($r2_s,$r2_q,$r2_len,0,$r2_len+1,\%random_sub_stats,1);
+               %random_sub_stats=%{$random_sub_seq_r};
+           }
            if ($drop_2==0)
            {
            #    print "drop2\t",$drop_2,"\t";
-               ($seq_r,$drop_2,$r2_s_trimmed)=&get_base_and_quality_info($r2_s_trimmed,$r2_q_trimmed,$r2_trim_len,$pos5,$pos3,\%stats);
+               ($seq_r,$drop_2,$r2_s_trimmed)=&get_base_and_quality_info($r2_s_trimmed,$r2_q_trimmed,$r2_trim_len,$pos5,$pos3,\%stats,$qc_only);
                %stats=%{$seq_r};
             #   print $drop_2,"\n";
            }
@@ -1341,7 +1541,7 @@ sub qc_process {
         }
         if ($drop_1==0 and $drop_2==0)
         {
-            $paired_seq_num = $paired_seq_num + 2;
+            $paired_seq_num = $paired_seq_num + 2 if ($input2);
             $total_paired_bases += $trim_len + $r2_trim_len;  
         }
  
@@ -1408,6 +1608,7 @@ sub qc_process {
   $stats{file_name_2}=$input2;
   $stats{trim_file_name_1}=$trim_output_1;
   $stats{trim_file_name_2}=$trim_output_2;
+  $stats{random_sub_raw}=$random_sub_seq_r;
   return \%stats;
 }
 
@@ -1559,6 +1760,7 @@ sub get_base_and_quality_info
      my $start_pos=shift;
      my $end_pos=shift;
      my $stats=shift;
+     my $qc_only=shift;
      my $total_q=0;
      my $avg_q=0;
      my $drop=0;

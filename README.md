@@ -30,6 +30,9 @@ BASIC USAGE
 ---------------
 VERSION HISTORY
 ---------------
+======== Version 1.31
+- report raw subsample graphic results side-by-side with qc results for comparison.  
+
 ======== Version 1.3
 - add -phiX to filter phiX reads
 - add -substitute to replace "N" in the trimmed reads with random base A,T,C ,or G
