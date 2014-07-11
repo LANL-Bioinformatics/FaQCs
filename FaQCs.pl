@@ -38,11 +38,13 @@
 use strict;
 use File::Basename;
 use Getopt::Long;
+use Data::Dumper;
+use FindBin qw($Bin);
+use lib "$Bin/../lib";
 use Parallel::ForkManager;
 use String::Approx;
-use Data::Dumper;
 
-my $version=1.31;
+my $version=1.32;
 my $debug=0;
 
 sub Usage {
@@ -58,6 +60,10 @@ print <<"END";
                           BWA trim is NOT A HARD cutoff! (see bwa's bwa_trim_read() function in bwaseqio.c)
 
             -q            <INT> Targets # as quality level (default 5) for trimming
+    
+            -5end         <INT> Cut # bp from 5 end before quality trimming/filtering 
+      
+            -3end         <INT> Cut # bp from 3 end before quality trimming/filtering 
 
             -adapter      <bool> Filter reads with illumina adapter/primers (default: no)
                           -rate   <FLOAT> Mismatch ratio of adapters' length (default: 0.2, allow 20% mismatches)
@@ -118,6 +124,8 @@ my $thread=2;
 my $opt_q=5;
 my $opt_min_L=50;
 my $opt_avg_cutoff=0;
+my $trim_5_end=0;
+my $trim_3_end=0;
 my $ascii;
 my $mode="BWA";
 my $N_num_cutoff=2;
@@ -159,6 +167,8 @@ my $cutlimit2=0.3;
 GetOptions("q=i"          => \$opt_q,
            "min_L=i"      => \$opt_min_L,
            "avg_q=f"      => \$opt_avg_cutoff,
+           "5end=i"       => \$trim_5_end,
+           "3end=i"       => \$trim_3_end,
            "mode=s"       => \$mode,
            "p=s"          => \@paired_files,
            "u=s"          => \@unpaired_files,
@@ -215,6 +225,7 @@ my $qa_avg_quality_histogram="$outDir/qa.$prefix.for_qual_histogram.txt";
 my $qa_base_matrix="$outDir/qa.$prefix.base.matrix";
 my $qa_nuc_composition_file="$outDir/qa.$prefix.base_content.txt";
 my $qa_length_histogram="$outDir/qa.$prefix.length_count.txt";
+my $fastq_count="$outDir/fastqCount.txt";
 
 # output files
 $trimmed_discard_fastq_file="$outDir/$prefix.discard.fastq" if (!$trimmed_discard_fastq_file);
@@ -300,6 +311,7 @@ my ( $i_file_name, $i_path, $i_suffix );
   
 my ($phiX_id,$phiX_seq) = &read_phiX174 if ($filter_phiX);
 
+open(my $fastqCount_fh, ">$fastq_count") or die "Cannot write $fastq_count\n";
   foreach my $input (@unpaired_files,@paired_files){
      print "Processing $input file\n";
      #print $STATS_fh "Processing $input file\n";
@@ -314,7 +326,12 @@ my ($phiX_id,$phiX_seq) = &read_phiX174 if ($filter_phiX);
 
     #split
     ($total_count_1,$total_len_1,@split_files) = &split_fastq($reads1_file,$outDir,$subfile_size);
-    ($total_count_2,$total_len_2,@split_files_2) = &split_fastq($reads2_file,$outDir,$subfile_size) if ($reads2_file);
+    printf $fastqCount_fh ("%s\t%d\t%d\t%.2f\n",basename($reads1_file),$total_count_1,$total_len_1,$total_len_1/$total_count_1);
+    if ($reads2_file)
+    {
+        ($total_count_2,$total_len_2,@split_files_2) = &split_fastq($reads2_file,$outDir,$subfile_size);
+        printf $fastqCount_fh ("%s\t%d\t%d\t%.2f\n",basename($reads2_file),$total_count_2,$total_len_2,$total_len_2/$total_count_2);
+    }
      $total_count += $total_count_1 + $total_count_2;
      $total_len += $total_len_1 + $total_len_2;
      my $random_num_ref = &random_subsample(scalar(@split_files),$subsample_num);
@@ -375,35 +392,38 @@ my ($phiX_id,$phiX_seq) = &read_phiX174 if ($filter_phiX);
                     $EachAdapter{$_}->{basesNum} += $tmp_Adapters{$_}->{basesNum};
                   } keys %tmp_Adapters;
           }
-          my %temp_avgQ = %{$nums_ref->{ReadAvgQ}};
-          map {$AverageQ{$_}->{bases} += $temp_avgQ{$_}->{basesNum};
-               $AverageQ{$_}->{reads} += $temp_avgQ{$_}->{readsNum}; 
+          if ($nums_ref->{ReadAvgQ})
+          {
+              my %temp_avgQ = %{$nums_ref->{ReadAvgQ}};
+              map {$AverageQ{$_}->{bases} += $temp_avgQ{$_}->{basesNum};
+                   $AverageQ{$_}->{reads} += $temp_avgQ{$_}->{readsNum}; 
               } keys %temp_avgQ; 
-          my %temp_position= %{$nums_ref->{qual}};
-          my %temp_base_position= %{$nums_ref->{base}};
+          }
+          my %temp_position= %{$nums_ref->{qual}} if ($nums_ref->{qual});
+          my %temp_base_position= %{$nums_ref->{base}} if ($nums_ref->{base});
           my %qa_temp_position= %{$random_sub_raw_ref->{qual}} if ($random_sub_raw_ref);
           my %qa_temp_base_position= %{$random_sub_raw_ref->{base}} if ($random_sub_raw_ref);
           foreach my $pos (1..($total_raw_seq_len/$total_num))
           {
                 for my $score ($lowest_illumina_score..$highest_illumina_score)
                 { 
-                    $position{$pos}->{$score} += $temp_position{$pos}->{$score};
+                    $position{$pos}->{$score} += $temp_position{$pos}->{$score} if ($nums_ref->{qual});
                     $qa_position{$pos}->{$score} += $qa_temp_position{$pos}->{$score} if ($random_sub_raw_ref);
-                    $total_score +=  $score * $temp_position{$pos}->{$score}; 
+                    $total_score +=  $score * $temp_position{$pos}->{$score} if ($nums_ref->{qual});
                 }
                 for my $nuc ("A","T","C","G","N")
                 {
-                    $base_position{$pos}->{$nuc} += $temp_base_position{$pos}->{$nuc};
+                    $base_position{$pos}->{$nuc} += $temp_base_position{$pos}->{$nuc} if ($nums_ref->{base});
                     $qa_base_position{$pos}->{$nuc} += $qa_temp_base_position{$pos}->{$nuc} if ($random_sub_raw_ref);
                 }
           }
-          my %tmp_base_content = %{$nums_ref->{Base_content}};
+          my %tmp_base_content = %{$nums_ref->{Base_content}} if ($nums_ref->{Base_content});
           my %qa_tmp_base_content = %{$random_sub_raw_ref->{Base_content}} if ($random_sub_raw_ref);
           for my $nuc ("A","T","C","G","N","GC")
           {
               while (my ($key, $value)= each %{$tmp_base_content{$nuc}})
               {
-                 $base_content{$nuc}->{$key} += $value;
+                 $base_content{$nuc}->{$key} += $value if ($nums_ref->{Base_content});
               }
               if ($random_sub_raw_ref)
               {
@@ -413,9 +433,12 @@ my ($phiX_id,$phiX_seq) = &read_phiX174 if ($filter_phiX);
                  }
               }
           } 
-          while (my ($key, $value)= each %{$nums_ref->{ReadLen}} )
+          if ($nums_ref->{ReadLen})
           {
+              while (my ($key, $value)= each %{$nums_ref->{ReadLen}} )
+              {
 		         $len_hash{$key} += $value;   
+              }
           }
           if ( $random_num_ref->{$ident}){
               open (KMEROUT, ">>$kmer_files") or die "$!\n";
@@ -456,11 +479,17 @@ my ($phiX_id,$phiX_seq) = &read_phiX174 if ($filter_phiX);
 
           #print $STATS_fh " Processed $total_num/$total_count\n";
           print "Processed $total_num/$total_count\n";
-          printf (" Post Trimming Length(Mean, Std, Median, Max, Min) of %d reads with Overall quality %.2f\n",$processed_num, $total_score/$nums_ref->{total_trim_seq_len});
-          printf (" (%.2f, %.2f, %.1f, %d, %d)\n",$trim_seq_len_avg,$trim_seq_len_std,$median,$max,$min);
+          if ( $nums_ref->{total_trim_seq_len} )
+          {
+              printf (" Post Trimming Length(Mean, Std, Median, Max, Min) of %d reads with Overall quality %.2f\n",$nums_ref->{trim_seq_num}, $total_score/$nums_ref->{total_trim_seq_len});
+              printf (" (%.2f, %.2f, %.1f, %d, %d)\n",$trim_seq_len_avg,$trim_seq_len_std,$median,$max,$min);
           #unlink $split_files[$ident];
           #unlink $split_files_2[$ident] if ($split_files_2[$ident]);
-         
+          }
+          else
+          {
+              print "All reads are trimmed/filtered\n";
+          } 
         } else {  # problems occuring during storage or retrieval will throw a warning
           print qq|No message received from child process $pid! on $ident\n|;
         }
@@ -486,6 +515,7 @@ my ($phiX_id,$phiX_seq) = &read_phiX174 if ($filter_phiX);
   }
 } #end foreach $input
 
+close $fastqCount_fh;
 
 # concatenate each thread's trimmed reads and files clean up.
 if (! $qc_only)
@@ -553,6 +583,8 @@ unlink $kmer_files;
 #        unlink $kmer_histogram_file;
     }
 }
+
+# END MAIN
 exit(0);
 
 sub build_initial_quality_matrix  # not used yet
@@ -683,7 +715,7 @@ sub print_final_stats{
     if ($qc_only)
     {
       print $fh "\n";
-      print $fh "Reads: $total_count\n";
+      print $fh "Reads #: $total_count\n";
       print $fh "Total bases: $total_len\n";
       printf $fh ("Reads Length: %.2f\n",$total_len/$total_count);
       print $fh "Processed $total_num reads for quality check only\n";
@@ -708,12 +740,12 @@ sub print_final_stats{
     {
  #     print $fh "\nQC process\n";
       print $fh "Before Trimming\n";
-      print $fh "Reads: $total_num\n";
+      print $fh "Reads #: $total_num\n";
       print $fh "Total bases: $total_raw_seq_len\n";
       printf $fh ("Reads Length: %.2f\n",$total_raw_seq_len/$total_num);
     
       print $fh "\nAfter Trimming\n";
-      printf $fh ("Reads: %d (%.2f %%)\n",$trimmed_num, $trimmed_num/$total_num*100);
+      printf $fh ("Reads #: %d (%.2f %%)\n",$trimmed_num, $trimmed_num/$total_num*100);
       printf $fh ("Total bases: %d (%.2f %%)\n",$total_trimmed_seq_len,$total_trimmed_seq_len/$total_raw_seq_len*100);
       if ($trimmed_num)
       {
@@ -725,13 +757,13 @@ sub print_final_stats{
       }
     
       if (@paired_files){
-        printf $fh ("  Paired Reads: %d (%.2f %%)\n",$paired_seq_num, $paired_seq_num/$trimmed_num*100);
+        printf $fh ("  Paired Reads #: %d (%.2f %%)\n",$paired_seq_num, $paired_seq_num/$trimmed_num*100);
         printf $fh ("  Paired total bases: %d (%.2f %%)\n",$total_paired_bases,$total_paired_bases/$total_trimmed_seq_len*100);
-        printf $fh ("  Unpaired Reads: %d (%.2f %%)\n", $trimmed_num - $paired_seq_num, ($trimmed_num - $paired_seq_num)/$trimmed_num*100);
+        printf $fh ("  Unpaired Reads #: %d (%.2f %%)\n", $trimmed_num - $paired_seq_num, ($trimmed_num - $paired_seq_num)/$trimmed_num*100);
         printf $fh ("  Unpaired total bases: %d (%.2f %%)\n", $total_trimmed_seq_len - $total_paired_bases , ($total_trimmed_seq_len - $total_paired_bases)/$total_trimmed_seq_len*100);
       }
     
-      printf $fh ("\nDiscarded reads: %d (%.2f %%)\n", $total_num - $trimmed_num , ($total_num - $trimmed_num)/$total_num*100);
+      printf $fh ("\nDiscarded reads #: %d (%.2f %%)\n", $total_num - $trimmed_num , ($total_num - $trimmed_num)/$total_num*100);
       printf $fh ("Trimmed bases: %d (%.2f %%)\n", $total_raw_seq_len - $total_trimmed_seq_len, ($total_raw_seq_len - $total_trimmed_seq_len)/$total_raw_seq_len*100);
       printf $fh ("  Reads Filtered by length cutoff (%d bp): %d (%.2f %%)\n", $opt_min_L, $readsFilterByLen , ($readsFilterByLen)/$total_num*100);
       printf $fh ("  Bases Filtered by length cutoff: %d (%.2f %%)\n", $basesFilterByLen , ($basesFilterByLen)/$total_raw_seq_len*100);
@@ -1296,7 +1328,8 @@ sub qc_process {
   my $avg_q;
   my ($pos5,$pos3);
   my ($raw_seq_num_1,$raw_seq_num_2,$total_raw_seq_len);
-  my ($trim_seq_num_1,$trim_seq_num_2,$trim_seq_len, $total_trim_seq_len,@trim_seq_len);
+  my ($trim_seq_num_1,$trim_seq_num_2,$trim_seq_len, $total_trim_seq_len)=(0,0,0,0);
+  my @trim_seq_len=();
   my ($paired_seq_num,$total_paired_bases); 
   my (%tmp1,%tmp2);
   my ($drop_1,$drop_2)=(0,0);
@@ -1351,6 +1384,18 @@ sub qc_process {
                 $stats{filter}->{adapter}->{readsNum}++;
                 $stats{filter}->{adapter}->{basesNum} += ($len - $trim_len);
             }
+        }
+        if ($trim_5_end)
+        {
+            $s_trimmed=substr($s_trimmed,$trim_5_end);
+            $q_trimmed=substr($q_trimmed,$trim_5_end);
+            $trim_len = length ($s_trimmed);
+        }
+        if ($trim_3_end)
+        {
+            $s_trimmed=substr($s_trimmed,0,$trim_len-$trim_3_end);
+            $q_trimmed=substr($q_trimmed,0,$trim_len-$trim_3_end);
+            $trim_len = length ($s_trimmed);
         }
         #apply length filter
         if ($trim_len < $opt_min_L || $trim_len == 0)
@@ -1461,6 +1506,18 @@ sub qc_process {
                    $stats{filter}->{adapter}->{readsNum}++;
                    $stats{filter}->{adapter}->{basesNum} += ($r2_len - $r2_trim_len);
                }
+           }
+           if ($trim_5_end)
+           {
+               $r2_s_trimmed=substr($r2_s_trimmed,$trim_5_end);
+               $r2_q_trimmed=substr($r2_q_trimmed,$trim_5_end);
+               $r2_trim_len = length ($r2_s_trimmed);
+           }
+           if ($trim_3_end)
+           {
+               $r2_s_trimmed=substr($r2_s_trimmed,0,$r2_trim_len-$trim_3_end);
+               $r2_q_trimmed=substr($r2_q_trimmed,0,$r2_trim_len-$trim_3_end);
+               $r2_trim_len = length ($r2_s_trimmed);
            }
            if ($r2_trim_len < $opt_min_L || $r2_trim_len == 0)
            {
@@ -2041,6 +2098,7 @@ sub split_fastq {
    while (<IN>)
    {
           last if (eof);
+          next if (/^$/);
           $name = $_;
           $seq=<IN>;
           $seq =~ s/\n//g;
@@ -2162,10 +2220,12 @@ sub filter_adapter
 sub filter_phiX
 {
     my ($s,$mismatchRate)=@_;
-    my $match_flag=0;
+    my @match;
     $mismatchRate = $mismatchRate*100;
-    $match_flag = String::Approx::amatch($s, ["i", "S ${mismatchRate}%"], $phiX_seq);
-    if ($match_flag)
+    @match = String::Approx::aslice($s, ["i", "S ${mismatchRate}% I 0 D 0"], $phiX_seq);
+    #print $mismatchRate,"\t",$match[0][0],"\n";
+
+    if (defined $match[0][0])
     {
         return 1;
     }
@@ -2301,7 +2361,15 @@ ACGCGACGCCGTTCAACCAGATATTGAAGCAGAACGCAAAAAGAGAGATGAGATTGAGGC
 TGGGAAAAGTTACTGTAGCCGACGTTTTGGCGGCGCAACCTGTGACGACAAATCTGCTCA
 AATTTATGCGCGCTTCGATAAAAATGATTGGCGTATCCAACCTGCA";
    $seq=~ s/\n//g;
+   $seq .=  ReverseComplement($seq);
    return ($id,$seq);
+}
+
+sub ReverseComplement{
+        my $dna = $_[0];
+    my $ReverseCompSeq = reverse ($dna);
+        $ReverseCompSeq =~ tr/atgcrywsmkATGCRYWSMK/tacgyrswkmTACGYRSWKM/;
+        return($ReverseCompSeq);
 }
 
 1;

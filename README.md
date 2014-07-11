@@ -30,6 +30,11 @@ BASIC USAGE
 ---------------
 VERSION HISTORY
 ---------------
+======== Version 1.32
+- add -5end and -3end to cut x number base from 5' end or 3' end before quality trimming/filtering
+- fix bug on phiX filtering with reverse complementary strand hit
+- fix error when all reads in subsample are filtered/trimmed.
+
 ======== Version 1.31
 - report raw subsample graphic results side-by-side with qc results for comparison.  
 
