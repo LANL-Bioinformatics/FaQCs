@@ -33,7 +33,7 @@
 # All right reserved. This program is free software; you can redistribute #
 # it and/or modify it under the same terms as Perl itself.                #
 #                                                                         #
-# LAST REVISED: July 2013                                                 #
+# LAST REVISED: Aug 2014                                                  # 
 ###########################################################################
 use strict;
 use File::Basename;
@@ -44,17 +44,21 @@ use lib "$Bin/../lib";
 use Parallel::ForkManager;
 use String::Approx;
 
-my $version=1.32;
+my $version=1.33;
 my $debug=0;
 
 sub Usage {
+    my $msg=shift;
+    my $short_usage = "perl $0 [options] [-u unpaired.fastq] -p reads1.fastq reads2.fastq -d out_directory";
+($msg)?
+print "\n $msg\n\n $short_usage\n\n Option -h to see full usage \n\n" :
 print <<"END";
-     Usage: perl $0 [options] [-u unpaired.fastq] -p 'reads1.fastq reads2.fastq' -d out_directory
+     Usage: $short_usage
      Version $version
      Input File: (can use more than once)
             -u            <Files> Unpaired reads
             
-            -p            <Files> Paired reads in two files and separate by space in quote
+            -p            <Files> Paired reads in two files and separate by space
      Trim:
             -mode         "HARD" or "BWA" (default BWA)
                           BWA trim is NOT A HARD cutoff! (see bwa's bwa_trim_read() function in bwaseqio.c)
@@ -79,7 +83,7 @@ print <<"END";
 
             -lc           <FLOAT> Low complexity filter ratio, Maximum fraction of mono-/di-nucleotide sequence  (default: 0.85)
 
-            -phiX         <bool> Filter phiX reads 
+            -phiX         <bool> Filter phiX reads (slow)
             
      Q_Format:
             -ascii        Encoding type: 33 or 64 or autoCheck (default)
@@ -110,10 +114,12 @@ print <<"END";
             -discard      <bool> Output discarded reads to prefix.discard.fastq (default: 0, not output)
  
             -substitute   <bool> Replace "N" in the trimmed reads with random base A,T,C ,or G (default: 0, off)
+ 
+            -trim_only    <bool> No quality report. Output trimmed reads only.
 
             -debug        <bool> keep intermediate files
 END
-exit;
+exit(1);
 }
 
 # magic number of quality score
@@ -148,6 +154,7 @@ my @unpaired_files;
 my $outDir;
 my $output_discard;
 my $qc_only=0;
+my $trim_only=0;
 my $stringent_cutoff=0;
 my $filter_adapter=0;
 my $filter_phiX=0;
@@ -170,8 +177,8 @@ GetOptions("q=i"          => \$opt_q,
            "5end=i"       => \$trim_5_end,
            "3end=i"       => \$trim_3_end,
            "mode=s"       => \$mode,
-           "p=s"          => \@paired_files,
-           "u=s"          => \@unpaired_files,
+           "p=s{,}"       => \@paired_files,
+           "u=s{,}"       => \@unpaired_files,
            "ascii=i"      => \$ascii,
            "n=i"          => \$N_num_cutoff,
            'stringent_q=i'=> \$stringent_cutoff,
@@ -187,6 +194,7 @@ GetOptions("q=i"          => \$opt_q,
            'discard'      => \$output_discard,
            'substitute'   => \$replace_N,
            'qc_only'      => \$qc_only,
+           'trim_only'    => \$trim_only,
            'subset=i'     => \$subsample_num,
            'debug'        => \$debug,
            'adapter'      => \$filter_adapter,
@@ -201,8 +209,30 @@ GetOptions("q=i"          => \$opt_q,
            "version"      => sub{print "Version: $version\n";exit;},
            "help|?"       => sub{Usage()} );
 
-die "Missing input files.\n", &Usage() unless @unpaired_files or @paired_files;
-die "Missing output directory.\n",&Usage() unless $outDir;
+
+####   Input check  ####
+Usage("Missing input files.") unless @unpaired_files or @paired_files;
+my @make_paired_paired_files;
+if (@paired_files)
+{
+    if (scalar(@paired_files) % 2) { Usage("Please check paired data input are even file numbers\n") ;}
+    map { if(is_file_empty($_)){ Usage("Please check paired data input at flag -p.\n $_ doesn't not exist or empty.");} } @paired_files;
+    #make pair in a new array 'read1_1 read1_2', 'read2_1 read2_2' ...
+    for(my$i=0;$i<=$#paired_files;$i=$i+2)
+    {
+         push @make_paired_paired_files, "$paired_files[$i] $paired_files[$i+1]";
+    }
+}
+
+if (@unpaired_files)
+{
+    map { if(is_file_empty($_)){ Usage("Please check unpaired data input at flag -u.\n $_ doesn't not exist or empty.");} } @unpaired_files;
+}
+Usage("Missing output directory at flag -d  ") unless $outDir;
+
+#########################
+
+
 if ($mode =~ /hard/i)
 {
     print "Hard trimming is used. \n" if (!$qc_only);
@@ -310,16 +340,17 @@ my %EachReplaceN;
 my ( $i_file_name, $i_path, $i_suffix );
   
 my ($phiX_id,$phiX_seq) = &read_phiX174 if ($filter_phiX);
+$filter_adapter=1 if ($artifactFile);
 
 open(my $fastqCount_fh, ">$fastq_count") or die "Cannot write $fastq_count\n";
-  foreach my $input (@unpaired_files,@paired_files){
+  foreach my $input (@unpaired_files,@make_paired_paired_files){
      print "Processing $input file\n";
      #print $STATS_fh "Processing $input file\n";
      my ($reads1_file,$reads2_file) = split /\s+/,$input;
   
      # check file 
-     if(&file_check($reads1_file)<0) { die "The file $reads1_file doesn't exist or empty.\n";}
-     if(&file_check($reads2_file)<0 and $reads2_file) { die "The file $reads2_file doesn't exist or empty.\n";}
+     if(&is_file_empty($reads1_file)<0) { die "The file $reads1_file doesn't exist or empty.\n";}
+     if(&is_file_empty($reads2_file)<0 and $reads2_file) { die "The file $reads2_file doesn't exist or empty.\n";}
 
      # check quality offset
      if (! $ascii){$ascii = &checkQualityFormat($reads1_file)}
@@ -481,7 +512,14 @@ open(my $fastqCount_fh, ">$fastq_count") or die "Cannot write $fastq_count\n";
           print "Processed $total_num/$total_count\n";
           if ( $nums_ref->{total_trim_seq_len} )
           {
-              printf (" Post Trimming Length(Mean, Std, Median, Max, Min) of %d reads with Overall quality %.2f\n",$nums_ref->{trim_seq_num}, $total_score/$nums_ref->{total_trim_seq_len});
+              if (!$trim_only)
+              {
+                  printf (" Post Trimming Length(Mean, Std, Median, Max, Min) of %d reads with Overall quality %.2f\n",$nums_ref->{trim_seq_num}, $total_score/$nums_ref->{total_trim_seq_len});
+              }
+              else
+              {
+                  printf (" Post Trimming Length(Mean, Std, Median, Max, Min) of %d reads\n",$nums_ref->{trim_seq_num});
+              }
               printf (" (%.2f, %.2f, %.1f, %d, %d)\n",$trim_seq_len_avg,$trim_seq_len_std,$median,$max,$min);
           #unlink $split_files[$ident];
           #unlink $split_files_2[$ident] if ($split_files_2[$ident]);
@@ -535,9 +573,9 @@ if (! $qc_only)
       }
     }
     
-    if (@paired_files)
+    if (@make_paired_paired_files)
     {
-      foreach my $input (@paired_files){
+      foreach my $input (@make_paired_paired_files){
         my ($reads1_file,$reads2_file) = split /\s+/,$input;
         ( $i_file_name, $i_path, $i_suffix ) = fileparse( "$reads1_file", qr/\.[^.]*/ );
         ( $i_file_name, $i_path, $i_suffix ) = fileparse( "$i_file_name", qr/\.[^.]*/ ) if ($i_suffix =~ /gz$/);
@@ -556,15 +594,16 @@ if (! $qc_only)
       }
     }  
 
-&print_quality_report_files($qa_quality_matrix,$qa_avg_quality_histogram,$qa_base_matrix,$qa_nuc_composition_file,$qa_length_histogram,\%qa_position,\%qa_AverageQ,\%qa_base_position,\%qa_base_content,\%qa_len_hash);
+&print_quality_report_files($qa_quality_matrix,$qa_avg_quality_histogram,$qa_base_matrix,$qa_nuc_composition_file,$qa_length_histogram,\%qa_position,\%qa_AverageQ,\%qa_base_position,\%qa_base_content,\%qa_len_hash) if (!$trim_only);
 }
 
 
 
 &Kmer_rarefaction() if ($kmer_rarefaction_on); 
-&print_quality_report_files($quality_matrix,$avg_quality_histogram,$base_matrix,$nuc_composition_file,$length_histogram,\%position,\%AverageQ,\%base_position,\%base_content,\%len_hash);
+&print_quality_report_files($quality_matrix,$avg_quality_histogram,$base_matrix,$nuc_composition_file,$length_histogram,\%position,\%AverageQ,\%base_position,\%base_content,\%len_hash) if (!$trim_only);
 &print_final_stats();
-&plot_by_R();
+&plot_by_R() if (!$trim_only);
+
 unless ($debug){
 unlink $nuc_composition_file;
 unlink $quality_matrix;
@@ -756,7 +795,7 @@ sub print_final_stats{
         printf $fh "Mean Reads Length: 0\n";
       }
     
-      if (@paired_files){
+      if (@make_paired_paired_files){
         printf $fh ("  Paired Reads #: %d (%.2f %%)\n",$paired_seq_num, $paired_seq_num/$trimmed_num*100);
         printf $fh ("  Paired total bases: %d (%.2f %%)\n",$total_paired_bases,$total_paired_bases/$total_trimmed_seq_len*100);
         printf $fh ("  Unpaired Reads #: %d (%.2f %%)\n", $trimmed_num - $paired_seq_num, ($trimmed_num - $paired_seq_num)/$trimmed_num*100);
@@ -809,12 +848,12 @@ sub plot_by_R
 
     open (R,">$outDir/tmp$$.R");
     print R <<RSCRIPT; 
-def.par <- par(no.readonly = TRUE) # get default parameters
 if(file.exists(\"$qa_length_histogram\")){
   pdf(file = \"$plots_file\",width=15,height=7)
 }else{
   pdf(file = \"$plots_file\",width=10,height=8)
 }
+def.par <- par(no.readonly = TRUE) # get default parameters
 
 #Summary
 par(family="mono")
@@ -958,8 +997,11 @@ ATCG_composition_plot <- function(base_matrix_file,totalReads,xlab,ylab) {
 	cPer<-(cBase/rowSums(baseM))*100
 	gPer<-(gBase/rowSums(baseM))*100
 
+        ymax<-floor(max(aPer,tPer,cPer,gPer))
+        ymin<-floor(min(aPer,tPer,cPer,gPer))
+        if((ymin-5)>0){ymin <- ymin-5}else{ymin<-0}
 	xpos<-seq(1,length(aBase),1)
-	plot(xpos,aPer,col='green3',type='l',xaxt='n',xlab=xlab,ylab=ylab ,ylim=c(1,100))
+	plot(xpos,aPer,col='green3',type='l',xaxt='n',xlab=xlab,ylab=ylab ,ylim=c(ymin,ymax+5))
 	lines(xpos,tPer,col='red')
 	lines(xpos,cPer,col='blue')
 	lines(xpos,gPer,col='black')
@@ -1012,7 +1054,7 @@ if(sampling_size< $trimmed_num){
     sampling<-paste(\"(Sampling\",format(sampling_size/1000000,digit=3),\"M Reads)\")
 }
 cumSeqNum<-cumsum(kmerfile\$V1);
-plot(cumSeqNum/1000000,kmerfile\$V3/1000000,xlab=paste(\"Number of Sequence (million)\",sampling), ylab=\"Number of Distinct Kmer (million,k=$kmer)\",type=\'l\',lty=2)
+plot(cumSeqNum/1000000,kmerfile\$V3/1000000,xlab=paste(\"Number of Sequence (million)\",sampling), ylab=\"Number of Distinct K-mer (million,k=$kmer)\",type=\'l\',lty=2)
 lines(cumSeqNum/1000000,kmerfile\$V2/1000000,col='blue',lwd=2)
 title(\"Kmer Rarefaction Curve\")
 y<-kmerfile\$V2/1000000
@@ -1031,11 +1073,11 @@ if(sampling_size<$trimmed_num){
     sampling<-paste(\"(Sampling\",format(sampling_size/1000000,digit=3),\"M Reads)\")
 }
 kmerHfile<-read.table(file=\"$kmer_histogram_file\")
-barplot(kmerHfile\$V2/1000000,names.arg=kmerHfile\$V1,xlab=\"Kmer Frequency\",log=\'y\',ylab=\"Number of Kmers (millions,k=$kmer)\",main=paste(\"Kmer Frequency Histogram\",sampling),col=\'darkcyan\',border=\'darkcyan\')
+barplot(kmerHfile\$V2[3:length(kmerHfile\$V1)],names.arg=kmerHfile\$V1[3:length(kmerHfile\$V1)],xlab=\"K-mer Count (k=$kmer)\",log=\'y\',ylab=\"Number of K-mer\",main=paste(\"K-mer Frequency Histogram\",sampling),col=\'darkcyan\',border=\'darkcyan\')
 total_kmer<-sum(kmerHfile\$V2)
 legend('topleft',paste(\"Total: \",total_kmer),bty='n')
 par(fig=c(0.5,0.9,0.5,1), new=TRUE)
-barplot(kmerHfile\$V2/1000000,xlim=c(0,100),names.arg=kmerHfile\$V1,log=\'y\',col=\'darkcyan\',border=\'darkcyan\')
+barplot(kmerHfile\$V2[3:length(kmerHfile\$V1)],xlim=c(0,100),names.arg=kmerHfile\$V1[3:length(kmerHfile\$V1)],log=\'y\',col=\'darkcyan\',border=\'darkcyan\')
 par(fig=c(0,1,0,1))
 par(def.par)#- reset to default
 
@@ -1307,14 +1349,14 @@ sub print_quality_report_files{
     close OUT4;
 }
 
-sub file_check 
+sub is_file_empty 
 {
     #check file exist and non zero size
     my $file=shift;
-    my $exist=-1;
-    if (-e $file) {$exist=1};
-    if (-z $file) {$exist=-1};
-    return $exist;
+    my $empty=1;
+    if (-e $file) {$empty=0};
+    if (-z $file) {$empty=1};
+    return $empty;
 }
 
 sub qc_process {
@@ -1456,13 +1498,13 @@ sub qc_process {
            }
            $drop_1=0 if ($qc_only);
         }
-        if ($random_select_file_flag and !$qc_only)
+        if ($random_select_file_flag and !$qc_only and !$trim_only)
         {
             my ($tmp1,$tmp2);
             ($random_sub_seq_r,$tmp1,$tmp2)=&get_base_and_quality_info($s,$q,$len,0,$len+1,\%random_sub_stats,1);
             %random_sub_stats=%{$random_sub_seq_r};
         }
-        if ($drop_1==0)
+        if ($drop_1==0 and ! $trim_only)
         {
           #     print "drop1\t",$drop_1,"\t";
             ($seq_r,$drop_1,$s_trimmed)=&get_base_and_quality_info($s_trimmed,$q_trimmed,$trim_len,$pos5,$pos3,\%stats,$qc_only);
@@ -1575,13 +1617,13 @@ sub qc_process {
                }
                $drop_2=0 if ($qc_only);
            }
-           if ($random_select_file_flag and !$qc_only)
+           if ($random_select_file_flag and !$qc_only and !$trim_only)
            {
                my ($tmp1,$tmp2);
                ($random_sub_seq_r,$tmp1,$tmp2)=&get_base_and_quality_info($r2_s,$r2_q,$r2_len,0,$r2_len+1,\%random_sub_stats,1);
                %random_sub_stats=%{$random_sub_seq_r};
            }
-           if ($drop_2==0)
+           if ($drop_2==0 and !$trim_only)
            {
            #    print "drop2\t",$drop_2,"\t";
                ($seq_r,$drop_2,$r2_s_trimmed)=&get_base_and_quality_info($r2_s_trimmed,$r2_q_trimmed,$r2_trim_len,$pos5,$pos3,\%stats,$qc_only);
@@ -1861,7 +1903,8 @@ sub get_base_and_quality_info
          $previous_base=$base;
          $seq{base}->{$pos}->{$base}++;
      }
-     $avg_q = int ($total_q/$len);
+     
+     $avg_q = ($len>0)? int ($total_q/$len):0;
    #  if (!$qc_only)
    #  {
          # apply filters:, average quality, low complexity
@@ -1872,10 +1915,10 @@ sub get_base_and_quality_info
              $seq{filter}->{AvgQ}->{basesNum}+=$len;
              $drop=1;
          }
-         $low_complexity_flag=1 if ((($a_Base/$len) > $low_complexity_cutoff_ratio) and $drop==0);
-         $low_complexity_flag=1 if ((($t_Base/$len) > $low_complexity_cutoff_ratio) and $drop==0);
-         $low_complexity_flag=1 if ((($c_Base/$len) > $low_complexity_cutoff_ratio) and $drop==0);
-         $low_complexity_flag=1 if ((($g_Base/$len) > $low_complexity_cutoff_ratio) and $drop==0);
+         $low_complexity_flag=1 if ( $len >0 and (($a_Base/$len) > $low_complexity_cutoff_ratio) and $drop==0);
+         $low_complexity_flag=1 if ( $len >0 and (($t_Base/$len) > $low_complexity_cutoff_ratio) and $drop==0);
+         $low_complexity_flag=1 if ( $len >0 and (($c_Base/$len) > $low_complexity_cutoff_ratio) and $drop==0);
+         $low_complexity_flag=1 if ( $len >0 and (($g_Base/$len) > $low_complexity_cutoff_ratio) and $drop==0);
          if ($drop == 0)
          {
            foreach my $di_nuc (keys %di_nucleotide)
@@ -1910,11 +1953,11 @@ sub get_base_and_quality_info
      }
      else
      {
-         $a_Base_percent = sprintf("%.2f",$a_Base/$len*100);
-         $t_Base_percent = sprintf("%.2f",$t_Base/$len*100);
-         $c_Base_percent = sprintf("%.2f",$c_Base/$len*100);
-         $g_Base_percent = sprintf("%.2f",$g_Base/$len*100);
-         $n_Base_percent = sprintf("%.2f",$n_Base/$len*100);
+         $a_Base_percent = ($len>0)? sprintf("%.2f",$a_Base/$len*100):0;
+         $t_Base_percent = ($len>0)? sprintf("%.2f",$t_Base/$len*100):0;
+         $c_Base_percent = ($len>0)? sprintf("%.2f",$c_Base/$len*100):0;
+         $g_Base_percent = ($len>0)? sprintf("%.2f",$g_Base/$len*100):0;
+         $n_Base_percent = ($len>0)? sprintf("%.2f",$n_Base/$len*100):0;
          $seq{ReadAvgQ}->{$avg_q}->{readsNum}++;
          $seq{ReadAvgQ}->{$avg_q}->{basesNum}+=$len;
          $seq{ReadLen}->{$len}++;
@@ -2220,12 +2263,12 @@ sub filter_adapter
 sub filter_phiX
 {
     my ($s,$mismatchRate)=@_;
-    my @match;
+    my $match_flag;
     $mismatchRate = $mismatchRate*100;
-    @match = String::Approx::aslice($s, ["i", "S ${mismatchRate}% I 0 D 0"], $phiX_seq);
+    $match_flag = String::Approx::amatch($s, ["i", "S ${mismatchRate}% I 0 D 0"], $phiX_seq);
     #print $mismatchRate,"\t",$match[0][0],"\n";
 
-    if (defined $match[0][0])
+    if ($match_flag)
     {
         return 1;
     }

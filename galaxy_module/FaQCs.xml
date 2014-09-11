@@ -12,7 +12,7 @@ FaQCs.pl
 
 #if $condition2.inputOpt != "1"
   #for $i in $condition2.pe_input
-  -p '${i.pe1} ${i.pe2}'
+  -p ${i.pe1} ${i.pe2}
   #end for
 #end if 
 #if $condition2.inputOpt != "2"
