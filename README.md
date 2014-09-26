@@ -38,7 +38,7 @@ Full USAGE
             
             -p            <Files> Paired reads in two files and separate by space
     Trim:
-            -mode         "HARD" or "BWA" (default BWA)
+            -mode         "HARD" or "BWA" or "BWA_plus" (default BWA_plus)
                           BWA trim is NOT A HARD cutoff! (see bwa's bwa_trim_read() function in bwaseqio.c)
 
             -q            <INT> Targets # as quality level (default 5) for trimming
@@ -104,6 +104,7 @@ VERSION HISTORY
 ======== Version 1.33
 - input paired no need quote for exploit the autocomplete feature
 - add trim_only option
+- mode with  "HARD" or "BWA" or "BWA_plus" (default BWA_plus)
 
 ======== Version 1.32
 - add -5end and -3end to cut x number base from 5' end or 3' end before quality trimming/filtering
