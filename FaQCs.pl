@@ -60,7 +60,7 @@ print <<"END";
             
             -p            <Files> Paired reads in two files and separate by space
      Trim:
-            -mode         "HARD" or "BWA" (default BWA)
+            -mode         "HARD" or "BWA" or "BWA_plus" (default BWA_plus)
                           BWA trim is NOT A HARD cutoff! (see bwa's bwa_trim_read() function in bwaseqio.c)
 
             -q            <INT> Targets # as quality level (default 5) for trimming
@@ -133,7 +133,7 @@ my $opt_avg_cutoff=0;
 my $trim_5_end=0;
 my $trim_3_end=0;
 my $ascii;
-my $mode="BWA";
+my $mode="BWA_plus";
 my $N_num_cutoff=2;
 my $replace_N;
 my $out_offset=33;
@@ -236,11 +236,22 @@ Usage("Missing output directory at flag -d  ") unless $outDir;
 if ($mode =~ /hard/i)
 {
     print "Hard trimming is used. \n" if (!$qc_only);
+    $mode="hard";
 }
-else
+elsif ($mode =~ /BWA_plus/i)
+{
+    print "Bwa extension trimming algorithm is used. \n" if (!$qc_only);
+    $mode="BWA_plus";
+}
+elsif ($mode =~ /BWA/i)
 {
     print "Bwa trimming algorithm is used. \n" if (!$qc_only);
     $mode="BWA";
+}
+else   # default
+{
+    print "Not recognized mode $mode. Bwa extension trimming algorithm is used. \n" if (!$qc_only);
+    $mode="BWA_plus";
 }
 
 ###### Output file initialization #####
@@ -434,20 +445,43 @@ open(my $fastqCount_fh, ">$fastq_count") or die "Cannot write $fastq_count\n";
           my %temp_base_position= %{$nums_ref->{base}} if ($nums_ref->{base});
           my %qa_temp_position= %{$random_sub_raw_ref->{qual}} if ($random_sub_raw_ref);
           my %qa_temp_base_position= %{$random_sub_raw_ref->{base}} if ($random_sub_raw_ref);
-          foreach my $pos (1..($total_raw_seq_len/$total_num))
-          {
-                for my $score ($lowest_illumina_score..$highest_illumina_score)
-                { 
-                    $position{$pos}->{$score} += $temp_position{$pos}->{$score} if ($nums_ref->{qual});
-                    $qa_position{$pos}->{$score} += $qa_temp_position{$pos}->{$score} if ($random_sub_raw_ref);
-                    $total_score +=  $score * $temp_position{$pos}->{$score} if ($nums_ref->{qual});
-                }
-                for my $nuc ("A","T","C","G","N")
-                {
-                    $base_position{$pos}->{$nuc} += $temp_base_position{$pos}->{$nuc} if ($nums_ref->{base});
-                    $qa_base_position{$pos}->{$nuc} += $qa_temp_base_position{$pos}->{$nuc} if ($random_sub_raw_ref);
-                }
+
+          for my $score ($lowest_illumina_score..$highest_illumina_score)
+          {   
+              if ($nums_ref->{qual})
+              {
+                  foreach my $pos (keys (%temp_position))
+                  {
+                      $position{$pos}->{$score} += $temp_position{$pos}->{$score};
+                      $total_score +=  $score * $temp_position{$pos}->{$score};
+                  }
+              }
+              if ($random_sub_raw_ref)
+              {
+                  foreach my $pos (keys (%qa_temp_position))
+                  {
+                      $qa_position{$pos}->{$score} += $qa_temp_position{$pos}->{$score};
+                  }
+              }
           }
+          for my $nuc ("A","T","C","G","N")
+          {
+              if ($nums_ref->{base})
+              {
+                  foreach my $pos (keys (%temp_base_position))
+                  {
+                      $base_position{$pos}->{$nuc} += $temp_base_position{$pos}->{$nuc};
+                  }
+              }
+              if ($random_sub_raw_ref)
+              {
+                  foreach my $pos (keys (%qa_temp_base_position))
+                  {
+                      $qa_base_position{$pos}->{$nuc} += $qa_temp_base_position{$pos}->{$nuc};
+                  }
+              }
+          }
+          
           my %tmp_base_content = %{$nums_ref->{Base_content}} if ($nums_ref->{Base_content});
           my %qa_tmp_base_content = %{$random_sub_raw_ref->{Base_content}} if ($random_sub_raw_ref);
           for my $nuc ("A","T","C","G","N","GC")
@@ -822,6 +856,14 @@ sub print_final_stats{
       }
       printf $fh ("  Reads Trimmed by quality (%.1f): %d (%.2f %%)\n", $opt_q, $readsTrimByQual , ($readsTrimByQual)/$total_num*100);
       printf $fh ("  Bases Trimmed by quality: %d (%.2f %%)\n", $basesTrimByQual , ($basesTrimByQual)/$total_raw_seq_len*100);
+      if ($trim_5_end)
+      {
+        printf $fh ("  Reads Trimmed with %d bp from 5' end\n", $trim_5_end);
+      }
+      if ($trim_3_end)
+      {
+        printf $fh ("  Reads Trimmed with %d bp from 3' end\n", $trim_3_end);
+      }
       if ($filter_adapter){
         printf $fh ("  Reads Trimmed with Adapters/Primers: %d (%.2f %%)\n", $readsTrimByAdapter , ($readsTrimByAdapter)/$total_num*100);
         printf $fh ("  Bases Trimmed with Adapters/Primers: %d (%.2f %%)\n", $basesTrimByAdapter , ($basesTrimByAdapter)/$total_raw_seq_len*100);
@@ -984,7 +1026,7 @@ title("Reads GC content",adj=0)
 
 #ATCG composition per base ATCG plot
 baseM<-read.table(file=\"$base_matrix\")
-ATCG_composition_plot <- function(base_matrix_file,totalReads,xlab,ylab) {
+ATCG_composition_plot <- function(base_matrix_file,totalReads,xlab,ylab,xlab_adj) {
 	baseM<-read.table(file=base_matrix_file)
 	aBase<-baseM\$V1
 	tBase<-baseM\$V2
@@ -1005,7 +1047,7 @@ ATCG_composition_plot <- function(base_matrix_file,totalReads,xlab,ylab) {
 	lines(xpos,tPer,col='red')
 	lines(xpos,cPer,col='blue')
 	lines(xpos,gPer,col='black')
-	axis(1,at=xpos,labels=xpos)
+	axis(1,at=xpos,labels=xpos+xlab_adj)
 	legend('topright',c('A','T','C','G'),col=c('green3','red','blue','black'),box.col=0,lwd=1)
 	if (totalReads< $trimmed_num){
             mtext(side=3,paste(\"(Sampling\",formatC(totalReads/1000000,digits=3),\"M Reads)\"),adj=0)
@@ -1014,20 +1056,20 @@ ATCG_composition_plot <- function(base_matrix_file,totalReads,xlab,ylab) {
 }
 if(file.exists(\"$qa_base_matrix\")){
     par(mfrow=c(1,2))
-    qa.nBase<-ATCG_composition_plot(\"$qa_base_matrix\",qa.readsCount,"Input Reads Base",'Base content (%)')
-    nBase<-ATCG_composition_plot(\"$base_matrix\",readsCount,"Trimmed Reads Base","")
+    qa.nBase<-ATCG_composition_plot(\"$qa_base_matrix\",qa.readsCount,"Input Reads Base",'Base content (%)',0)
+    nBase<-ATCG_composition_plot(\"$base_matrix\",readsCount,"Trimmed Reads Base","",$trim_5_end)
 }else{
-    nBase<-ATCG_composition_plot(\"$base_matrix\",readsCount,"",'Base content (%)')
+    nBase<-ATCG_composition_plot(\"$base_matrix\",readsCount,"",'Base content (%)',0)
 }
 par(def.par)#- reset to default
 title("Nucleotide Content Per Cycle")
 
 
 #N composition per Base plot
-N_composition_plot<-function(BaseArray,totalReads,xlab,ylab){
+N_composition_plot<-function(BaseArray,totalReads,xlab,ylab,xlab_adj){
   xpos<-seq(1,length(BaseArray),1)
   plot(xpos,BaseArray/totalReads*1000000,col='red',type='l',xaxt='n',xlab=xlab,ylab=ylab,ylim=c(0,max(BaseArray/totalReads*1000000)))
-  axis(1,at=xpos,labels=xpos)
+  axis(1,at=xpos,labels=xpos+xlab_adj)
   legend('topright',paste("Total bases: ",sum(BaseArray)),bty='n')
   if (totalReads< $trimmed_num){
       mtext(side=3,paste(\"(Sampling\",formatC(totalReads/1000000,digits=3),\"M Reads)\"),adj=0)
@@ -1036,10 +1078,10 @@ N_composition_plot<-function(BaseArray,totalReads,xlab,ylab){
 if (sum(nBase) >0){
   if(file.exists(\"$qa_base_matrix\")){
     par(mfrow=c(1,2))
-    N_composition_plot(qa.nBase,qa.readsCount,"Input reads Position","N Base count per million reads")
-    N_composition_plot(nBase,readsCount,"Trimmed reads Position","")
+    N_composition_plot(qa.nBase,qa.readsCount,"Input reads Position","N Base count per million reads",0)
+    N_composition_plot(nBase,readsCount,"Trimmed reads Position","",$trim_5_end)
   }else{
-    N_composition_plot(nBase,readsCount,"Position","N Base count per million reads")
+    N_composition_plot(nBase,readsCount,"Position","N Base count per million reads",0)
   } 
 }
 par(def.par)#- reset to default
@@ -1119,7 +1161,7 @@ par(def.par)#- reset to default
 title('Reads Average Quality Histogram')
 
 # read in matrix file for the following three plots
-quality_boxplot<-function(quality_matrix_file,totalReads,totalBases,xlab,ylab){
+quality_boxplot<-function(quality_matrix_file,totalReads,totalBases,xlab,ylab,xlab_adj){
 	z<-as.matrix(read.table(file=quality_matrix_file))
 	x<-1:nrow(z)
 	y<-1:ncol(z)
@@ -1128,7 +1170,7 @@ quality_boxplot<-function(quality_matrix_file,totalReads,totalBases,xlab,ylab){
 	#quality boxplot per base
 	is.wholenumber <- function(x, tol = .Machine\$double.eps^0.5)  abs(x - round(x)) < tol
 	plot(1:length(x),x,type='n',xlab=xlab,ylab=ylab, ylim=c(0,max(y)+1),xaxt='n')
-	axis(1,at=x,labels=TRUE)
+	axis(1,at=x,labels=x+xlab_adj)
 
 	for (i in 1:length(x)) {
 	  total<-sum(z[i,])
@@ -1186,10 +1228,10 @@ quality_boxplot<-function(quality_matrix_file,totalReads,totalBases,xlab,ylab){
 }
 if (file.exists(\"$qa_quality_matrix\")){
     par(mfrow=c(1,2))
-    quality_boxplot(\"$qa_quality_matrix\",qa.readsCount,qa.totalBases,"Input Reads Position","Quality score")
-    quality_boxplot(\"$quality_matrix\",readsCount,totalBases,"Trimmed Reads Position","")
+    quality_boxplot(\"$qa_quality_matrix\",qa.readsCount,qa.totalBases,"Input Reads Position","Quality score",0)
+    quality_boxplot(\"$quality_matrix\",readsCount,totalBases,"Trimmed Reads Position","",$trim_5_end)
 }else{
-    quality_boxplot(\"$quality_matrix\",readsCount,totalBases,"Position","Quality score")
+    quality_boxplot(\"$quality_matrix\",readsCount,totalBases,"Position","Quality score",0)
 }
 par(def.par)#- reset to default
 title("Quality Boxplot Per Cycle")
@@ -1427,17 +1469,20 @@ sub qc_process {
                 $stats{filter}->{adapter}->{basesNum} += ($len - $trim_len);
             }
         }
-        if ($trim_5_end)
+        if ($trim_5_end && !$qc_only)
         {
             $s_trimmed=substr($s_trimmed,$trim_5_end);
             $q_trimmed=substr($q_trimmed,$trim_5_end);
             $trim_len = length ($s_trimmed);
+            $pos5=$pos5 + $trim_5_end;
+            
         }
-        if ($trim_3_end)
+        if ($trim_3_end && !$qc_only)
         {
             $s_trimmed=substr($s_trimmed,0,$trim_len-$trim_3_end);
             $q_trimmed=substr($q_trimmed,0,$trim_len-$trim_3_end);
             $trim_len = length ($s_trimmed);
+            $pos3=$pos3-$trim_3_end;
         }
         #apply length filter
         if ($trim_len < $opt_min_L || $trim_len == 0)
@@ -1461,11 +1506,15 @@ sub qc_process {
                my $before_trim_len=$trim_len;
                if ($mode =~ /hard/i)
                {
-                   ($s_trimmed,$q_trimmed,$pos5,$pos3)= &hard_trim ($trim_len,$s_trimmed,$q_trimmed,$pos5,$pos3);
+                   ($s_trimmed,$q_trimmed,$pos5,$pos3)= &hard_trim ($trim_len,$s,$q,$pos5,$pos3);
                }
-               else
+               elsif ($mode =~ /BWA_plus/i)
                {
-                   ($s_trimmed,$q_trimmed,$pos5,$pos3)= &bwa_trim ($trim_len,$s_trimmed,$q_trimmed,$pos5,$pos3);
+                   ($s_trimmed,$q_trimmed,$pos5,$pos3)= &bwa_trim_plus ($trim_len,$s,$q,$pos5,$pos3);
+               }
+               elsif ($mode =~ /BWA/i)
+               {
+                   ($s_trimmed,$q_trimmed,$pos5,$pos3)= &bwa_trim ($trim_len,$s,$q,$pos5,$pos3);
                }
                $trim_len=length($q_trimmed);
                $stats{filter}->{qualTrim}->{basesNum}+= ($before_trim_len - $trim_len);
@@ -1549,17 +1598,19 @@ sub qc_process {
                    $stats{filter}->{adapter}->{basesNum} += ($r2_len - $r2_trim_len);
                }
            }
-           if ($trim_5_end)
+           if ($trim_5_end && !$qc_only)
            {
                $r2_s_trimmed=substr($r2_s_trimmed,$trim_5_end);
                $r2_q_trimmed=substr($r2_q_trimmed,$trim_5_end);
                $r2_trim_len = length ($r2_s_trimmed);
+               $pos5=$pos5+$trim_5_end;
            }
-           if ($trim_3_end)
+           if ($trim_3_end && !$qc_only)
            {
                $r2_s_trimmed=substr($r2_s_trimmed,0,$r2_trim_len-$trim_3_end);
                $r2_q_trimmed=substr($r2_q_trimmed,0,$r2_trim_len-$trim_3_end);
                $r2_trim_len = length ($r2_s_trimmed);
+               $pos3=$pos3 - $trim_3_end;
            }
            if ($r2_trim_len < $opt_min_L || $r2_trim_len == 0)
            {
@@ -1582,11 +1633,15 @@ sub qc_process {
                    my $before_trim_len=$r2_trim_len;
                    if ($mode =~ /hard/i)
                    {
-                       ($r2_s_trimmed, $r2_q_trimmed, $pos5, $pos3)=&hard_trim ($r2_trim_len,$r2_s_trimmed,$r2_q_trimmed,$pos5,$pos3);
+                       ($r2_s_trimmed, $r2_q_trimmed, $pos5, $pos3)=&hard_trim ($r2_trim_len,$r2_s,$r2_q,$pos5,$pos3);
                    }
-                   else
+                   elsif ($mode =~ /BWA_plus/i)
                    {
-                       ($r2_s_trimmed, $r2_q_trimmed, $pos5, $pos3)=&bwa_trim ($r2_trim_len,$r2_s_trimmed,$r2_q_trimmed,$pos5,$pos3);
+                       ($r2_s_trimmed, $r2_q_trimmed, $pos5, $pos3)=&bwa_trim_plus ($r2_trim_len,$r2_s,$r2_q,$pos5,$pos3);
+                   }
+                   elsif ($mode =~ /BWA/i)
+                   {
+                       ($r2_s_trimmed, $r2_q_trimmed, $pos5, $pos3)=&bwa_trim ($r2_trim_len,$r2_s,$r2_q,$pos5,$pos3);
                    }
                    $r2_trim_len=length($r2_q_trimmed);
                    $stats{filter}->{qualTrim}->{basesNum}+= ($before_trim_len - $r2_trim_len);
@@ -1725,12 +1780,12 @@ sub filters  # not used
     return $drop;
 } 
      
-sub bwa_trim2
+sub bwa_trim
 {
-        # bwa trim implementation from both 5' and 3' end
+        # original bwa trim implementation  at 3' end
         my ($len,$s,$q,$final_pos_5,$final_pos_3) = @_;
         # trim 3' end
-        my $pos_3 = $len;
+        my $pos_3 = $final_pos_3-1;
  #       my $final_pos_3 =$pos_3+1;  
         my $area=0;  
         my $maxArea=0;
@@ -1744,18 +1799,18 @@ sub bwa_trim2
 		$pos_3--;
 	}
         # trim 5' end
-        my $pos_5=1; 
+  #      my $pos_5=1; 
   #      my $final_pos_5=0;
-        $maxArea=0;
-        $area=0;
-	while ($pos_5<$final_pos_3 and $area>=0) {
-		$area += $opt_q - (ord(substr($q,$pos_5-1,1))-$ascii);
-		if ($area > $maxArea) {
-			$maxArea = $area;
-			$final_pos_5 = $pos_5;
-		}
-		$pos_5++;
-	}
+  #      $maxArea=0;
+  #      $area=0;
+#	while ($pos_5<$final_pos_3 and $area>=0) {
+#		$area += $opt_q - (ord(substr($q,$pos_5-1,1))-$ascii);
+#		if ($area > $maxArea) {
+#			$maxArea = $area;
+#			$final_pos_5 = $pos_5;
+#		}
+#		$pos_5++;
+#	}
         
         $s = substr($s,$final_pos_5,$final_pos_3-$final_pos_5-1);
         $q = substr($q,$final_pos_5,$final_pos_3-$final_pos_5-1);
@@ -1766,7 +1821,7 @@ sub hard_trim
 {
     my ($len,$s,$q, $final_pos_5, $final_pos_3) =@_;
     # trim 3' end
-    my $pos_3 = $len;   
+    my $pos_3 = $final_pos_3-1;   
     while($pos_3 >0)
     {
         if ($opt_q < (ord(substr($q,$pos_3-1,1))-$ascii) )
@@ -1792,7 +1847,7 @@ sub hard_trim
     return ($s,$q,$final_pos_5,$final_pos_3);
 }
 
-sub bwa_trim
+sub bwa_trim_plus
 {
     # bwa trim implementation from both 5' and 3' end
     # at least scan 5 bases from both end and 2 more bases after the negative area
@@ -1802,7 +1857,7 @@ sub bwa_trim
     $at_least_scan = $len if $len <5;
     $num_after_neg = $len if $len <2;
     # trim 3' end
-    my $pos_3 = $len;
+    my $pos_3 = $final_pos_3-1;
  #   my $final_pos_3 =$pos_3+1;  
     my $area=0;  
     my $maxArea=0;
