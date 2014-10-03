@@ -2117,35 +2117,36 @@ sub quality_encoding_coversion
     return($q_string);
 }
 
+sub open_file
+{
+    my ($file) = @_;
+    my $fh;
+    my $pid;
+    if ( $file=~/\.gz$/i ) { $pid=open($fh, "gunzip -c $file |") or die ("gunzip -c $file: $!"); }
+    else { $pid=open($fh,'<',$file) or die("$file: $!"); }
+    return ($fh,$pid);
+}
 
 sub checkQualityFormat {
     # $offset_value=&checkQualityFormat($fastq_file)
     # $offset_value = -1 means not proper fastq format.
     my $fastq_file=shift;
     # open the files
-    if ($fastq_file =~ /gz$/)
-    {
-        open FQ, "zcat $fastq_file | " or die $!;
-    }
-    else
-    {
-        open FQ, "<", $fastq_file or die $!;
-    }
-
+    my ($fh,$pid) = open_file($fastq_file);
     # initiate
     my @line;
     my $l;
     my $number;
     my $offset;
     # go thorugh the file
-    my $first_line=<FQ>;
+    my $first_line=<$fh>;
     if ($first_line !~ /^@/) {$offset=-1; return $offset;}
-    OUTER:while(<FQ>){
+    OUTER:while(<$fh>){
       
       # if it is the line before the quality line
       if($_ =~ /^\+/){
     
-       $l = <FQ>; # get the quality line
+       $l = <$fh>; # get the quality line
        chomp $l;
        @line = split(//,$l); # divide in chars
        for(my $i = 0; $i <= $#line; $i++){ # for each char
@@ -2164,6 +2165,8 @@ sub checkQualityFormat {
        }
       }
     }
+   kill 9, $pid; # avoid gunzip broken pipe
+   close $fh;
    return $offset;
 }
 
@@ -2185,37 +2188,30 @@ sub split_fastq {
    my $out_file_name= $outDir . "/". $file_name . "_" . $file_ext . ".fastq";
    push @subfiles, $out_file_name;
    open (OUTFILE, ">" . $out_file_name ) or die ("Cannot open file for output: $!");
-   if ($i_suffix_1 =~ /gz/)
-   {
-      open (IN, "zcat $input | ") || die "cannot open file $input:$!";
-   }
-   else
-   {
-      open (IN, $input) || die "cannot open file $input:$!";
-   }
-   while (<IN>)
+   my ($fh,$pid) = open_file($input);
+   while (<$fh>)
    {
           last if (eof);
           next if (/^$/);
           $name = $_;
-          $seq=<IN>;
+          $seq=<$fh>;
           $seq =~ s/\n//g;
           while ($seq !~ /\+/)
           {
-             $seq .= <IN>;
+             $seq .= <$fh>;
              $seq =~ s/\n//g;
           }
           my $q_name_pos=index($seq,"+");
           $q_name = substr($seq,$q_name_pos);
           $seq = substr($seq, 0, $q_name_pos);
           my $seq_len = length $seq;
-          $qual_seq=<IN>;
+          $qual_seq=<$fh>;
           $qual_seq =~ s/\n//g;
           my $qual_seq_len = length $qual_seq;
           while ( $qual_seq_len < $seq_len )
           {
               last if ( $qual_seq_len == $seq_len);
-              $qual_seq .= <IN>;
+              $qual_seq .= <$fh>;
               $qual_seq =~ s/\n//g;
               $qual_seq_len = length $qual_seq;
           }
@@ -2238,7 +2234,7 @@ sub split_fastq {
    }
    my $average_len = $total_seq_length/$seq_num;
    if ( $average_len < $opt_min_L) { print "The input average length $average_len < minimum cutoff length(opt_min_L) $opt_min_L\n."; exit;}
-   close (IN)  or die( "Cannot close file : $!");
+   close ($fh)  or die( "Cannot close file : $!");
    close (OUTFILE) or die( "Cannot close file : $!") if (! eof OUTFILE);
    return ($seq_num,$total_seq_length,@subfiles);
 }
