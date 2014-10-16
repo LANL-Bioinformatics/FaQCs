@@ -213,20 +213,39 @@ GetOptions("q=i"          => \$opt_q,
 ####   Input check  ####
 Usage("Missing input files.") unless @unpaired_files or @paired_files;
 my @make_paired_paired_files;
+my %file;
 if (@paired_files)
 {
     if (scalar(@paired_files) % 2) { Usage("Please check paired data input are even file numbers\n") ;}
-    map { if(is_file_empty($_)){ Usage("Please check paired data input at flag -p.\n $_ doesn't not exist or empty.");} } @paired_files;
+    map { if(is_file_empty($_)){ Usage("Please check paired data input at flag -p.\n $_ doesn't not exist or empty."); $file{basename($_)}=1;} } @paired_files;
     #make pair in a new array 'read1_1 read1_2', 'read2_1 read2_2' ...
     for(my$i=0;$i<=$#paired_files;$i=$i+2)
-    {
-         push @make_paired_paired_files, "$paired_files[$i] $paired_files[$i+1]";
+    {            
+        if (&is_paired($paired_files[$i], $paired_files[$i+1]))
+        {
+            push @make_paired_paired_files, "$paired_files[$i] $paired_files[$i+1]";
+        }
+        else
+        {
+            print ("The seqeucne names of the paired end reads in $paired_files[$i],$paired_files[$i+1] are not matching.\nWill use them as single end reads\n");
+            push @unpaired_files, $paired_files[$i],$paired_files[$i+1];
+            delete $file{basename($paired_files[$i])};
+            delete $file{basename($paired_files[$i+1])};
+        }
     }
 }
 
 if (@unpaired_files)
 {
-    map { if(is_file_empty($_)){ Usage("Please check unpaired data input at flag -u.\n $_ doesn't not exist or empty.");} } @unpaired_files;
+    map { if(is_file_empty($_))
+          { 
+              Usage("Please check unpaired data input at flag -u.\n $_ doesn't not exist or empty.");
+          } 
+          if ($file{basename($_)}) 
+          {
+              Usage("The single end file, $_,has been used in the paired end data.")
+          }
+        } @unpaired_files;
 }
 Usage("Missing output directory at flag -d  ") unless $outDir;
 
@@ -2194,6 +2213,7 @@ sub split_fastq {
           last if (eof);
           next if (/^$/);
           $name = $_;
+          $name = '@'. "seq_$seq_num\n" if ($name =~ /No name/);
           $seq=<$fh>;
           $seq =~ s/\n//g;
           while ($seq !~ /\+/)
@@ -2464,6 +2484,44 @@ sub ReverseComplement{
     my $ReverseCompSeq = reverse ($dna);
         $ReverseCompSeq =~ tr/atgcrywsmkATGCRYWSMK/tacgyrswkmTACGYRSWKM/;
         return($ReverseCompSeq);
+}
+
+sub is_paired
+{
+    my $paired_1=shift;
+    my $paired_2=shift;
+    my ($fh1,$pid1)=open_file($paired_1);
+    my ($fh2,$pid2)=open_file($paired_2);
+    my $count=0;
+    my $check_num=1000;
+    my $is_paired = 1;
+    ## check top 1000 sequences paired by matching names.
+    for ($count..$check_num)
+    {
+        my $id1=<$fh1>;
+        my $seq1=<$fh1>;
+        my $q_id1=<$fh1>;
+        my $q_seq1=<$fh1>;
+        my $id2=<$fh2>;
+        my $seq2=<$fh2>;
+        my $q_id2=<$fh2>;
+        my $q_seq2=<$fh2>;
+        my ($name1) = $id1 =~ /(\S+)/; 
+        $name1 =~ s/\.\d$//;
+        $name1 =~ s/\/\d$//;
+        my ($name2) = $id2 =~ /(\S+)/; 
+        $name2 =~ s/\.\d$//;
+        $name2 =~ s/\/\d$//;
+        if ($name1 ne $name2)
+        {
+            $is_paired=0;
+        }
+    }
+    close $fh1;
+    close $fh2;
+    kill 9, $pid1; # avoid gunzip broken pipe
+    kill 9, $pid2; # avoid gunzip broken pipe
+    return $is_paired;
 }
 
 1;
