@@ -410,7 +410,8 @@ open(my $fastqCount_fh, ">$fastq_count") or die "Cannot write $fastq_count\n";
     $pm -> run_on_finish ( # called BEFORE the first call to start()
       sub {
         my ($pid, $exit_code, $ident, $exit_signal, $core_dump, $nums_ref) = @_;
-      
+        print qq|child process $ident, exit on singal $exit_signal| if ($exit_signal);
+        print qq|core dump from child process $pid! on $ident\n| if ($core_dump);
         # retrieve data structure from child
         if (defined($nums_ref)) {  # children are not forced to send anything
           my $random_sub_raw_ref;
