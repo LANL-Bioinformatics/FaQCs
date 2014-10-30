@@ -2132,6 +2132,7 @@ sub quality_encoding_coversion
     my $q_string=shift;
     my $input_offset=shift;
     my $out_offset=shift;
+    $q_string =~ s/[;<=>?]/@/g if ($input_offset == 64); # deal with score < 0
     $q_string=~ s/(\S)/chr(ord($1)-$input_offset+$out_offset)/eg;
     return($q_string);
 }
