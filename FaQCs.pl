@@ -212,6 +212,7 @@ GetOptions("q=i"          => \$opt_q,
 
 ####   Input check  ####
 Usage("Missing input files.") unless @unpaired_files or @paired_files;
+&checkDependedPrograms;
 my @make_paired_paired_files;
 my %file;
 if (@paired_files)
@@ -2524,6 +2525,17 @@ sub is_paired
     kill 9, $pid1; # avoid gunzip broken pipe
     kill 9, $pid2; # avoid gunzip broken pipe
     return $is_paired;
+}
+
+sub checkDependedPrograms
+{
+    if ($kmer_rarefaction_on)
+    {
+        system("which jellyfish 1>/dev/null") == 0
+             || die "jellyfish is not in your PATH\n $ENV{PATH}\n";
+    }
+    system("which R 1>/dev/null") == 0
+             || die "R is not in your PATH\n $ENV{PATH}\n";
 }
 
 1;
