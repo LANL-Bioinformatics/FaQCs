@@ -141,3 +141,8 @@ Features:
 - multi-threads  (required Parallel::ForkManager)
 - input paired end reads aware
 
+-------------
+CITATION
+-------------
+
+Chienchi Lo, PatrickS.G. Chain (2014) Rapid evaluation and Quality Control of Next Generation Sequencing Data with FaQCs. [BMC Bioinformatics. 2014 Nov 19;15 ](http://www.ncbi.nlm.nih.gov/pubmed/25408143)
