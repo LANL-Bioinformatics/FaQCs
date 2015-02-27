@@ -15,6 +15,11 @@ PREREQUISITES
 5. Jellyfish for kmer counting   (Optional) 
    (http://www.cbcb.umd.edu/software/jellyfish/) 
 
+Note: The two Perl modules can be installed by INSTALL.sh script in the lib directory.
+
+    cd lib
+    ./INSTALL.sh
+
 -----------
 BASIC USAGE
 -----------
@@ -32,7 +37,7 @@ Full USAGE
 -----------
      
     Usage: perl FaQCs.pl [options] [-u unpaired.fastq] -p reads1.fastq reads2.fastq -d out_directory
-    Version 1.33
+    Version 1.34
     Input File: (can use more than once)
             -u            <Files> Unpaired reads
             
@@ -94,12 +99,17 @@ Full USAGE
             -substitute   <bool> Replace "N" in the trimmed reads with random base A,T,C ,or G (default: 0, off)
  
             -trim_only    <bool> No quality report. Output trimmed reads only.
+ 
+            -5trim_off    <bool> Turn off trimming from 5'end.
 
             -debug        <bool> keep intermediate files
 
 ---------------
 VERSION HISTORY
 ---------------
+======== Version 1.34
+- add option "-5trim_off    <bool> Turn off trimming from 5'end."
+- add INSTALL.sh script for two requried perl modules installations.
 
 ======== Version 1.33
 - input paired no need quote for exploit the autocomplete feature
@@ -141,3 +151,8 @@ Features:
 - multi-threads  (required Parallel::ForkManager)
 - input paired end reads aware
 
+-------------
+CITATION
+-------------
+
+Chienchi Lo, PatrickS.G. Chain (2014) Rapid evaluation and Quality Control of Next Generation Sequencing Data with FaQCs. [BMC Bioinformatics. 2014 Nov 19;15 ](http://www.ncbi.nlm.nih.gov/pubmed/25408143)

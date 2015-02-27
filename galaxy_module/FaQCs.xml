@@ -192,16 +192,16 @@ A test dataset you can use as sample input is available at http://dl.dropbox.com
 
 **Citation and contacts**
 
-If you find IlluminaFastqQC useful in your research, please cite our paper:
+If you find FaQCs useful in your research, please cite our paper:
 
-| `Chien-Chi Lo`_ ,...  `Patrick Chain`_.
-| IlluminaFastqQC: Quality Control of Next Generateion Sequenceing Data
-| In preparation.
+| `Chien-Chi Lo`_  `Patrick Chain`_.
+| `Rapid evaluation and Quality Control of Next Generation Sequencing Data with FaQCs.`_
+| BMC Bioinformatics. 2014 Nov 19;15
  
 
 .. _Chien-Chi Lo: chienchi@lanl.gov
 .. _Patrick Chain: pchain@lanl.gov
-.. _FaQCs: Quality Control of Next Generateion Sequenceing Data: http://www.biomedcentral.com/bmcbioinformatics/
+.. _Rapid evaluation and Quality Control of Next Generation Sequencing Data with FaQCs.: http://www.ncbi.nlm.nih.gov/pubmed/25408143
 
 | If you have any questions or comments, feel free to `contact  us`_. 
 

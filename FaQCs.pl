@@ -40,11 +40,11 @@ use File::Basename;
 use Getopt::Long;
 use Data::Dumper;
 use FindBin qw($Bin);
-use lib "$Bin/../lib";
+use lib ("$Bin/../lib","$Bin/lib");
 use Parallel::ForkManager;
 use String::Approx;
 
-my $version=1.33;
+my $version=1.34;
 my $debug=0;
 
 sub Usage {
@@ -117,6 +117,8 @@ print <<"END";
  
             -trim_only    <bool> No quality report. Output trimmed reads only.
 
+            -5trim_off    <bool> Turn off trimming from 5'end.
+
             -debug        <bool> keep intermediate files
 END
 exit(1);
@@ -133,6 +135,7 @@ my $opt_avg_cutoff=0;
 my $trim_5_end=0;
 my $trim_3_end=0;
 my $ascii;
+my $trim_5_end_off;
 my $mode="BWA_plus";
 my $N_num_cutoff=2;
 my $replace_N;
@@ -180,6 +183,7 @@ GetOptions("q=i"          => \$opt_q,
            "p=s{,}"       => \@paired_files,
            "u=s{,}"       => \@unpaired_files,
            "ascii=i"      => \$ascii,
+           "5trim_off"    => \$trim_5_end_off,
            "n=i"          => \$N_num_cutoff,
            'stringent_q=i'=> \$stringent_cutoff,
            "lc=f"         => \$low_complexity_cutoff_ratio,
@@ -212,6 +216,7 @@ GetOptions("q=i"          => \$opt_q,
 
 ####   Input check  ####
 Usage("Missing input files.") unless @unpaired_files or @paired_files;
+&checkDependedPrograms;
 my @make_paired_paired_files;
 my %file;
 if (@paired_files)
@@ -1852,15 +1857,18 @@ sub hard_trim
         $pos_3--;
     }
     # trim 5' end
-    my $pos_5=$final_pos_5; 
-    while($pos_5<$pos_3)
+    if (!$trim_5_end_off)
     {
-        if ($opt_q < (ord(substr($q,$pos_5,1))-$ascii) )
-	{
-	    $final_pos_5=$pos_5;
-	    last;
-	}
-        $pos_5++;
+    	my $pos_5=$final_pos_5; 
+    	while($pos_5<$pos_3)
+    	{
+        	if ($opt_q < (ord(substr($q,$pos_5,1))-$ascii) )
+		{
+	    	$final_pos_5=$pos_5;
+	    	last;
+		}
+        	$pos_5++;
+    	}
     }
     $s = substr($s,$final_pos_5,$final_pos_3-$final_pos_5-1);
     $q = substr($q,$final_pos_5,$final_pos_3-$final_pos_5-1);
@@ -1893,22 +1901,25 @@ sub bwa_trim_plus
 	    $pos_3--;
     }
     # trim 5' end
-    my $pos_5=$final_pos_5+1; 
-  #  my $final_pos_5=0;
-    $maxArea=0;
-    $area=0;
-    $at_least_scan=5;
-    $at_least_scan = $len if $len <5;
-    while ($at_least_scan) 
+    if (!$trim_5_end_off)
     {
-        $at_least_scan--; 
-        if ($pos_5<($final_pos_3-$num_after_neg) and $area>=0) {$at_least_scan=$num_after_neg;}
-	    $area += $opt_q - (ord(substr($q,$pos_5-1,1))-$ascii);
-	    if ($area > $maxArea) {
+    	my $pos_5=$final_pos_5+1; 
+  	#  my $final_pos_5=0;
+    	$maxArea=0;
+    	$area=0;
+    	$at_least_scan=5;
+    	$at_least_scan = $len if $len <5;
+    	while ($at_least_scan) 
+    	{
+       		$at_least_scan--; 
+        	if ($pos_5<($final_pos_3-$num_after_neg) and $area>=0) {$at_least_scan=$num_after_neg;}
+	    	$area += $opt_q - (ord(substr($q,$pos_5-1,1))-$ascii);
+	    	if ($area > $maxArea) {
 		    $maxArea = $area;
 		    $final_pos_5 = $pos_5;
-	    }
-	    $pos_5++;
+	    	}
+	    	$pos_5++;
+    	}
     }
     if ($final_pos_3<=$final_pos_5)
     {
@@ -2133,6 +2144,7 @@ sub quality_encoding_coversion
     my $q_string=shift;
     my $input_offset=shift;
     my $out_offset=shift;
+    $q_string =~ s/[;<=>?]/@/g if ($input_offset == 64); # deal with score < 0
     $q_string=~ s/(\S)/chr(ord($1)-$input_offset+$out_offset)/eg;
     return($q_string);
 }
@@ -2523,6 +2535,17 @@ sub is_paired
     kill 9, $pid1; # avoid gunzip broken pipe
     kill 9, $pid2; # avoid gunzip broken pipe
     return $is_paired;
+}
+
+sub checkDependedPrograms
+{
+    if ($kmer_rarefaction_on)
+    {
+        system("which jellyfish 1>/dev/null") == 0
+             || die "jellyfish is not in your PATH\n $ENV{PATH}\n";
+    }
+    system("which R 1>/dev/null") == 0
+             || die "R is not in your PATH\n $ENV{PATH}\n";
 }
 
 1;
