@@ -1,6 +1,6 @@
 FaQCs: Quality Control of Next Generateion Sequenceing Data
-=======
-
+===========================================================
+![3D QC plot](http://oi61.tinypic.com/n36p9x.jpg)
 -------------
 PREREQUISITES
 -------------
@@ -156,3 +156,4 @@ CITATION
 -------------
 
 Chienchi Lo, PatrickS.G. Chain (2014) Rapid evaluation and Quality Control of Next Generation Sequencing Data with FaQCs. [BMC Bioinformatics. 2014 Nov 19;15 ](http://www.ncbi.nlm.nih.gov/pubmed/25408143)
+
