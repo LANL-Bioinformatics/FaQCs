@@ -971,7 +971,7 @@ length_histogram <- function(length_count_file, xlab,ylab){
   return(totalReads)
 }
 if(file.exists(\"$qa_length_histogram\")){
-    par(mfrow=c(1,2))
+    par(mfrow=c(1,2),mar=c(5,6,4,2))
     qa.readsCount<-length_histogram(\"$qa_length_histogram\","Input Length","Count (millions)")
     readsCount<-length_histogram(\"$length_histogram\","Trimmed Length","")
 }else{
@@ -1014,7 +1014,7 @@ readGC_plot <- function(base_content_file, totalReads, fig_x_start,fig_x_end,xla
 	Caggregate<-tapply(CpercentCount,list(cut(Cpercent,breaks=c(seq(0,100,1)))),FUN=sum)
 	Gaggregate<-tapply(GpercentCount,list(cut(Gpercent,breaks=c(seq(0,100,1)))),FUN=sum)
 
-	par(fig=c(fig_x_start,(fig_x_end-fig_x_start)*0.75+fig_x_start,0,1),mar=c(5,4,4,2),xpd=FALSE,cex.main=1.2,new=new)
+	par(fig=c(fig_x_start,(fig_x_end-fig_x_start)*0.75+fig_x_start,0,1),mar=c(5,6,4,2),xpd=FALSE,cex.main=1.2,new=new)
 	plot(GCaggregate/1000000,xlim=c(0,100),type="h",lwd=4,xlab=paste(xlab,"GC (%)"),ylab=ylab,lend=2)
 	legend.txt<-c(paste("GC",sprintf ("%.2f%%",gcAvg),"±",sprintf ("%.2f",gcStd)))
 	legend('topright',legend.txt,bty='n')
@@ -1080,7 +1080,7 @@ ATCG_composition_plot <- function(base_matrix_file,totalReads,xlab,ylab,xlab_adj
 	return(nBase)
 }
 if(file.exists(\"$qa_base_matrix\")){
-    par(mfrow=c(1,2))
+    par(mfrow=c(1,2),mar=c(5,6,4,2))
     qa.nBase<-ATCG_composition_plot(\"$qa_base_matrix\",qa.readsCount,"Input Reads Base",'Base content (%)',0)
     nBase<-ATCG_composition_plot(\"$base_matrix\",readsCount,"Trimmed Reads Base","",$trim_5_end)
 }else{
@@ -1102,7 +1102,7 @@ N_composition_plot<-function(BaseArray,totalReads,xlab,ylab,xlab_adj){
 }
 if (sum(nBase) >0){
   if(file.exists(\"$qa_base_matrix\")){
-    par(mfrow=c(1,2))
+    par(mfrow=c(1,2),mar=c(5,6,4,2))
     N_composition_plot(qa.nBase,qa.readsCount,"Input reads Position","N Base count per million reads",0)
     N_composition_plot(nBase,readsCount,"Trimmed reads Position","",$trim_5_end)
   }else{
@@ -1113,7 +1113,7 @@ par(def.par)#- reset to default
 title("N Nucleotide Content Per Cycle")
 
 if(file.exists(\"$kmer_rarefaction_file\")){
-
+par(mar=c(5,6,4,2))
 kmerfile<-read.table(file=\"$kmer_rarefaction_file\")
 sampling_size<-sum(kmerfile\$V1)
 sampling<-""
@@ -1130,11 +1130,12 @@ lres<-lm(y~x)
 # y=ax+b
 a<-format(coef(lres)[[2]], digits = 2)
 b<-format(coef(lres)[[1]], digits = 2)
+par(def.par)#- reset to default
 
 }
 
 if(file.exists(\"$kmer_histogram_file\")){
-
+par(mar=c(5,6,4,2))
 sampling<-""
 if(sampling_size<$trimmed_num){
     sampling<-paste(\"(Sampling\",format(sampling_size/1000000,digit=3),\"M Reads)\")
@@ -1154,7 +1155,7 @@ par(def.par)#- reset to default
 quality_histogram<-function(qual_histogram_file,totalReads,xlab,ylab){
 	Qhist_file<-read.table(file=qual_histogram_file,header=TRUE)
 	cumulate<-cumsum(Qhist_file\$readsNum)
-	par(mar=c(5,4,5,4))
+	par(mar=c(5,6,5,4))
 	if (missing(ylab)){ylab2<-""} else {ylab2<-ylab}
 	plot(Qhist_file\$Score,Qhist_file\$readsNum/1000000,type='h',xlim=c(max(Qhist_file\$Score),min(Qhist_file\$Score)),xlab=xlab, ylab=ylab2,lwd=12,lend=2)
 	par(new=TRUE)
@@ -1252,7 +1253,7 @@ quality_boxplot<-function(quality_matrix_file,totalReads,totalBases,xlab,ylab,xl
 	}
 }
 if (file.exists(\"$qa_quality_matrix\")){
-    par(mfrow=c(1,2))
+    par(mfrow=c(1,2),mar=c(5,6,4,2))
     quality_boxplot(\"$qa_quality_matrix\",qa.readsCount,qa.totalBases,"Input Reads Position","Quality score",0)
     quality_boxplot(\"$quality_matrix\",readsCount,totalBases,"Trimmed Reads Position","",$trim_5_end)
 }else{
@@ -1274,7 +1275,7 @@ quality_3d_plot<-function(quality_matrix_file,totalReads,xlab,ylab){
         }
 }
 if (file.exists(\"$qa_quality_matrix\")){
-    par(mfrow=c(1,2))
+    par(mfrow=c(1,2),mar=c(5,6,4,2))
     quality_3d_plot(\"$qa_quality_matrix\",qa.readsCount,"Input Reads Position","Q Score")
     quality_3d_plot(\"$quality_matrix\",readsCount,"Trimmed Reads Position","Q Score")
 }else{
@@ -1304,7 +1305,7 @@ quality_count_histogram<-function(quality_matrix_file,totalReads,highestScore,xl
         }
 }
 if (file.exists(\"$qa_quality_matrix\")){
-    par(mfrow=c(1,2))
+    par(mfrow=c(1,2),mar=c(5,6,4,2))
     quality_count_histogram(\"$qa_quality_matrix\",qa.readsCount,upper_limit,"Input Reads Q score","Total (million)")
     quality_count_histogram(\"$quality_matrix\",readsCount,upper_limit,"Trimmed Reads Q score","")
 }else{
