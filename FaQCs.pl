@@ -1267,7 +1267,7 @@ quality_3d_plot<-function(quality_matrix_file,totalReads,xlab,ylab){
 	x<-1:nrow(z)
 	y<-1:ncol(z)
 	y<-y-1
-    persp(x,y,z/1000000,theta = 50, phi = 30, expand = 0.7, col = terrain.colors(length(z),alpha=0.8),border=NA,ntick=10,ticktype="detailed",xlab=xlab,ylab=ylab,zlab="",r=6,shade=0.75)
+    persp(x,y,z/1000000,theta = 50, phi = 30, expand = 0.7, col = rev(terrain.colors(length(z),alpha=0.8)),border=NA,ntick=10,ticktype="detailed",xlab=xlab,ylab=ylab,zlab="",r=6,shade=0.75)
     mtext(side=2, "Frequency (millions)",line=2)
 	if (totalReads< $trimmed_num){
             mtext(side=3,paste(\"(Sampling\",formatC(totalReads/1000000,digits=3),\"M Reads)\"),adj=0)
