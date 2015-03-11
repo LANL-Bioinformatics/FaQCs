@@ -761,7 +761,8 @@ sub Kmer_rarefaction {
       chomp;                                        
       #my $subset_kmer_file="$outDir/$files[$i]";                         
       my ($subset_kmer_file, $seq_num) = split /\t/, $_; 
-      $subset_kmer_file = $subset_kmer_file.$prefix."_0";
+	# jellyfish v1 output xxxx_0 count result.  jellyfish 2 doesn't not
+      $subset_kmer_file = ( -e "$subset_kmer_file${prefix}_0")?"$subset_kmer_file${prefix}_0":"$subset_kmer_file$prefix";
       #my ($subset_file_name) = $subset_kmer_file =~ /(\S+)${prefix}_0/; 
       #$sequence_num += $subfile_size_hash{$subset_file_name};                          
       if ($count==0)                                                                   
