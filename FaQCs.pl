@@ -1430,8 +1430,8 @@ sub is_file_empty
 
 sub qc_process {
   my ($input, $input2,$random_select_file_flag) = @_;
-  my ($h1,$s,$s_trimmed,$h2,$q, $q_trimmed); my $len=0; my $trim_len=0;
-  my ($r2_h1,$r2_s,$r2_s_trimmed,$r2_h2,$r2_q,$r2_q_trimmed); my $r2_len=0; my $r2_trim_len=0;
+  my ($h1,$s,$s_trimmed,$h2,$q, $q_trimmed); my ($len, $len_q, $trim_len)=(0,0,0);
+  my ($r2_h1,$r2_s,$r2_s_trimmed,$r2_h2,$r2_q,$r2_q_trimmed); my ($r2_len, $r2_len_q, $r2_trim_len)=(0,0,0);
   my %stats;
   my %random_sub_stats;
   $stats{filter}->{adapter}->{readsNum}=0;
@@ -1473,10 +1473,11 @@ sub qc_process {
         $raw_seq_num_1++;
         $s = <IN>;  # read sequence
         chomp $s;
+        $len = length($s);
         $h2 = <IN>;  # read second header
         $q = <IN>;  # read quality scores
         chomp $q;
-        $len = length($q);
+        $len_q = length($q);
         $total_raw_seq_len += $len;
         $s_trimmed=$s;
         $q_trimmed=$q;
@@ -1495,6 +1496,12 @@ sub qc_process {
                 $stats{filter}->{adapter}->{readsNum}++;
                 $stats{filter}->{adapter}->{basesNum} += ($len - $trim_len);
             }
+        }
+        if ( $len != $len_q){
+            $stats{filter}->{len_ne}->{readsNum}++;
+            $stats{filter}->{len_ne}->{basesNum}+=$trim_len;
+            warn "$h1 sequence length is no equal to quality string length. It will be filtered.\n";
+            $drop_1=1;
         }
         if ($trim_5_end && !$qc_only)
         {
@@ -1600,10 +1607,11 @@ sub qc_process {
            $raw_seq_num_2++;
            $r2_s = <IN2>;  # mate read sequence
            chomp $r2_s;
+           $r2_len = length($r2_s);
            $r2_h2 = <IN2>;  # mate read second header
            $r2_q = <IN2>;  # mate read quality scores
            chomp $r2_q;
-           $r2_len = length($r2_q);
+           $r2_len_q = length($r2_q);
            $total_raw_seq_len += $r2_len;
            $r2_s_trimmed=$r2_s;
            $r2_q_trimmed=$r2_q;
@@ -1624,6 +1632,13 @@ sub qc_process {
                    $stats{filter}->{adapter}->{readsNum}++;
                    $stats{filter}->{adapter}->{basesNum} += ($r2_len - $r2_trim_len);
                }
+           }
+           if ( $r2_len != $r2_len_q)
+           {
+               $stats{filter}->{len_ne}->{readsNum}++;
+               $stats{filter}->{len_ne}->{basesNum}+=$r2_trim_len;
+               warn "$r2_h1 sequence length is no equal to quality string length. It will be filtered.\n";
+               $drop_2=1;
            }
            if ($trim_5_end && !$qc_only)
            {
