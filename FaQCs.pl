@@ -350,7 +350,7 @@ if ($qc_only)
     #$low_complexity_cutoff_ratio=1;
 }
 
-
+my $orig_opt_q = $opt_q;
 my ( $total_count,$total_count_1, $total_count_2, $total_len_1,$total_len_2, $total_len);
 my ( $total_num, $trimmed_num,$total_raw_seq_len, $total_trimmed_seq_len);
 my ( $trim_seq_len_std, $trim_seq_len_avg, $max, $min, $median);
@@ -389,6 +389,12 @@ open(my $fastqCount_fh, ">$fastq_count") or die "Cannot write $fastq_count\n";
 
      # check quality offset
      if (! $ascii){$ascii = &checkQualityFormat($reads1_file)}
+
+     # check NextSeq platform
+     if( &is_NextSeq($reads1_file) and $opt_q < 15){
+        $opt_q = 15;
+        warn "The input looks like NextSeq data and the quality level (-q) is adjusted to 15 for trimming.\n";
+     }else{ $opt_q = $orig_opt_q;}
 
     #split
     ($total_count_1,$total_len_1,@split_files) = &split_fastq($reads1_file,$outDir,$subfile_size);
@@ -2174,6 +2180,20 @@ sub open_file
     if ( $file=~/\.gz$/i ) { $pid=open($fh, "gunzip -c $file |") or die ("gunzip -c $file: $!"); }
     else { $pid=open($fh,'<',$file) or die("$file: $!"); }
     return ($fh,$pid);
+}
+
+sub is_NextSeq{
+    $SIG{'PIPE'}=sub{};
+    my $file=shift;
+    my ($fh,$pid)= open_file($file);
+    my $head=<$fh>;
+    close $fh;
+    kill 9, $pid; # avoid gunzip broken pipe
+
+    $SIG{'PIPE'} = 'DEFAULT';
+    ($head =~/^\@NS\d+/)?
+        return 1:
+        return 0;
 }
 
 sub checkQualityFormat {
