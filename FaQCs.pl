@@ -1744,7 +1744,7 @@ sub qc_process {
         if ($drop_1==0 and $drop_2==0)
         {
             $paired_seq_num = $paired_seq_num + 2 if ($input2);
-            $total_paired_bases += $trim_len + $r2_trim_len;  
+            $total_paired_bases += $trim_len + $r2_trim_len if($input2);
         }
  
         # output trimmed files
