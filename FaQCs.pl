@@ -391,9 +391,9 @@ open(my $fastqCount_fh, ">$fastq_count") or die "Cannot write $fastq_count\n";
      if (! $ascii){$ascii = &checkQualityFormat($reads1_file)}
 
      # check NextSeq platform
-     if( &is_NextSeq($reads1_file) and $opt_q < 15){
-        $opt_q = 15;
-        warn "The input looks like NextSeq data and the quality level (-q) is adjusted to 15 for trimming.\n";
+     if( &is_NextSeq($reads1_file) and $opt_q < 16){
+        $opt_q = 16;
+        warn "The input looks like NextSeq data and the quality level (-q) is adjusted to 16 for trimming.\n";
      }else{ $opt_q = $orig_opt_q;}
 
     #split
