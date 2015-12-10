@@ -69,7 +69,7 @@ print <<"END";
       
             -3end         <INT> Cut # bp from 3 end before quality trimming/filtering 
 
-            -adapter      <bool> Filter reads with illumina adapter/primers (default: no)
+            -adapter      <bool> Trim reads with illumina adapter/primers (default: no)
                           -rate   <FLOAT> Mismatch ratio of adapters' length (default: 0.2, allow 20% mismatches)
             					
             -artifactFile  <File>    additional artifact (adapters/primers/contaminations) reference file in fasta format 
