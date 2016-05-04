@@ -290,7 +290,7 @@ my $qa_avg_quality_histogram="$outDir/qa.$prefix.for_qual_histogram.txt";
 my $qa_base_matrix="$outDir/qa.$prefix.base.matrix";
 my $qa_nuc_composition_file="$outDir/qa.$prefix.base_content.txt";
 my $qa_length_histogram="$outDir/qa.$prefix.length_count.txt";
-my $fastq_count="$outDir/fastqCount.txt";
+my $fastq_count="$outDir/$prefix.fastqCount.txt";
 
 # output files
 $trimmed_discard_fastq_file="$outDir/$prefix.discard.fastq" if (!$trimmed_discard_fastq_file);
