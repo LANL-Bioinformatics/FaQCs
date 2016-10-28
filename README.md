@@ -37,7 +37,7 @@ Full USAGE
 -----------
      
     Usage: perl FaQCs.pl [options] [-u unpaired.fastq] -p reads1.fastq reads2.fastq -d out_directory
-    Version 1.34
+    Version 1.35
     Input File: (can use more than once)
             -u            <Files> Unpaired reads
             
@@ -107,6 +107,10 @@ Full USAGE
 ---------------
 VERSION HISTORY
 ---------------
+======== Version 1.35
+- add option "-polyA"  Trim polyA 
+- update adapter trimming algorithm. If more than one adapter in a read, the whole read is filtered.
+
 ======== Version 1.34
 - add option "-5trim_off    <bool> Turn off trimming from 5'end."
 - add INSTALL.sh script for two requried perl modules installations.
