@@ -37,7 +37,7 @@ Full USAGE
 -----------
      
     Usage: perl FaQCs.pl [options] [-u unpaired.fastq] -p reads1.fastq reads2.fastq -d out_directory
-    Version 1.35
+    Version 1.36
     Input File: (can use more than once)
             -u            <Files> Unpaired reads
             
@@ -107,6 +107,11 @@ Full USAGE
 ---------------
 VERSION HISTORY
 ---------------
+======== Version 1.36
+- add option "-replace_to_N_q" (replace base G to N when below this quality score)
+- auto detect pacbio CCS reads quality encoding with score > 41
+- fix major bugs: trim 5 end and trim 3 end does not work
+
 ======== Version 1.35
 - add option "-polyA"  Trim polyA 
 - update adapter trimming algorithm. If more than one adapter in a read, the whole read is filtered.
