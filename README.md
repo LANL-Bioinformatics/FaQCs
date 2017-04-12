@@ -54,6 +54,8 @@ Full USAGE
 
             -adapter      <bool> Trim reads with illumina adapter/primers (default: no)
                           -rate   <FLOAT> Mismatch ratio of adapters' length (default: 0.2, allow 20% mismatches)
+                          -polyA  <bool>  Trim poly A ( > 15 ) 
+                          -keepshort  turn on this will keep short portion of reads instead of keep longer portion of reads
             					
             -artifactFile  <File>    additional artifact (adapters/primers/contaminations) reference file in fasta format 
     Filters:
@@ -100,6 +102,8 @@ Full USAGE
  
             -trim_only    <bool> No quality report. Output trimmed reads only.
  
+            -replace_to_N_q  <INT>  For NextSeq data, to replace base G to N when below this quality score (default:0, off)
+
             -5trim_off    <bool> Turn off trimming from 5'end.
 
             -debug        <bool> keep intermediate files

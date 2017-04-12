@@ -73,6 +73,7 @@ print <<"END";
             -adapter      <bool> Trim reads with illumina adapter/primers (default: no)
                           -rate   <FLOAT> Mismatch ratio of adapters' length (default: 0.2, allow 20% mismatches)
                           -polyA  <bool>  Trim poly A ( > 15 ) 
+                          -keepshort  turn on this will keep short portion of reads instead of keep longer portion of reads
             					
             -artifactFile  <File>    additional artifact (adapters/primers/contaminations) reference file in fasta format 
      Filters:
@@ -166,6 +167,7 @@ my $qc_only=0;
 my $trim_only=0;
 my $stringent_cutoff=0;
 my $filter_adapter=0;
+my $keep_short_after_adapter_trim=0;
 my $trim_polyA;
 my $filter_phiX=0;
 my $filterAdapterMismatchRate=0.2;
@@ -210,6 +212,7 @@ GetOptions("q=i"          => \$opt_q,
            'subset=i'     => \$subsample_num,
            'debug'        => \$debug,
            'adapter'      => \$filter_adapter,
+           'keepshort'    => \$keep_short_after_adapter_trim,
            'polyA'        => \$trim_polyA,
            'phiX'         => \$filter_phiX,
            'rate=f'       => \$filterAdapterMismatchRate,
@@ -2367,13 +2370,23 @@ sub filter_adapter
             my $match_len=$match[0][1];
             if ( int($s_len/2)-$index < ($match_len/2) )  # longer left
             {
-                 substr($s,$index,$s_len-$index,"");
-                 $pos3=length($s)+1;
+                 if ($keep_short_after_adapter_trim){
+                     substr($s,0,$index+$match_len,"");
+                     $pos5=$index+$match_len;
+                 }else{
+                     substr($s,$index,$s_len-$index,"");
+                     $pos3=length($s)+1;
+                }
             }
             else  #longer right
             {
-                 substr($s,0,$index+$match_len,"");
-                 $pos5=$index+$match_len;
+                 if ($keep_short_after_adapter_trim){
+                     substr($s,$index,$s_len-$index,"");
+                     $pos3=length($s)+1;
+                 }else{
+                     substr($s,0,$index+$match_len,"");
+                     $pos5=$index+$match_len;
+                 }
             }
             # same adapter sencond match
             my $match = String::Approx::amatch($adapter, ["i", "S ${mismatchRate}% I 0 D 0"], $s);
