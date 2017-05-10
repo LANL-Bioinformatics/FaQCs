@@ -410,10 +410,12 @@ open(my $fastqCount_fh, ">$fastq_count") or die "Cannot write $fastq_count\n";
      if (! $ascii){$ascii = &checkQualityFormat($reads1_file)}
 
      # check NextSeq platform
-     if( &is_NextSeq($reads1_file) and $opt_q < 20){
-        $is_NextSeq=1;
-        $opt_q = 20;
-        warn "The input looks like NextSeq data and the quality level (-q) is adjusted to $opt_q for trimming.\n";
+     $is_NextSeq = ( &is_NextSeq($reads1_file) )?1:0;
+     if( $is_NextSeq ){
+        if ($orig_opt_q < 20){
+          $opt_q = 20;
+          warn "The input looks like NextSeq data and the quality level (-q) is adjusted to $opt_q for trimming.\n";
+        }
      }else{ $opt_q = $orig_opt_q;}
 
     #split
@@ -2329,7 +2331,7 @@ sub split_fastq {
 
    }
    my $average_len = $total_seq_length/$seq_num;
-   if ( $average_len < $opt_min_L) { print "The input average length $average_len < minimum cutoff length(opt_min_L) $opt_min_L\n."; exit;}
+   if ( $average_len < $opt_min_L) { print "The input average length $average_len < minimum cutoff length(opt_min_L) $opt_min_L.\n"; exit;}
    close ($fh)  or die( "Cannot close file : $!");
    close (OUTFILE) or die( "Cannot close file : $!") if (! eof OUTFILE);
    return ($seq_num,$total_seq_length,@subfiles);
