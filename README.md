@@ -115,7 +115,7 @@ Expected output files
 - QC.1.trimmed.fastq
 - QC.2.trimmed.fastq
 - QC.unpaired.trimmed.fastq
-- QC.stats.txt
+- [QC.stats.txt](https://raw.githubusercontent.com/LANL-Bioinformatics/FaQCs/master/example/output/QC.stats.txt)
 - QC_qc_report.pdf
 
 [Example qc_report.pdf file](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4246454/bin/12859_2014_366_MOESM1_ESM.pdf)
