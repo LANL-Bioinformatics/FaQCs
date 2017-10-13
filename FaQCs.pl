@@ -1531,7 +1531,7 @@ sub qc_process {
             warn "$h1 sequence length is no equal to quality string length. It will be filtered.\n";
             $drop_1=1;
         }
-        if ($trim_5_end && !$qc_only && ($trim_len>=$trim_5_end))
+        if ($trim_5_end && !$qc_only && ($trim_len>$trim_5_end))
         {
             $s_trimmed=substr($s_trimmed,$trim_5_end);
             $q_trimmed=substr($q_trimmed,$trim_5_end);
@@ -1539,7 +1539,7 @@ sub qc_process {
             $pos5=$pos5 + $trim_5_end;
             
         }
-        if ($trim_3_end && !$qc_only && ($trim_len>=$trim_3_end))
+        if ($trim_3_end && !$qc_only && ($trim_len>$trim_3_end))
         {
             $s_trimmed=substr($s_trimmed,0,$trim_len-$trim_3_end);
             $q_trimmed=substr($q_trimmed,0,$trim_len-$trim_3_end);
@@ -1547,7 +1547,7 @@ sub qc_process {
             $pos3=$pos3-$trim_3_end;
         }
         #apply length filter
-        if ($trim_len < $opt_min_L || $trim_len == 0)
+        if ($trim_len < $opt_min_L || $trim_len == 0 || $trim_len<=($trim_5_end+$trim_3_end))
         {
             $stats{filter}->{len}->{readsNum}++;
             $stats{filter}->{len}->{basesNum}+=$trim_len;
@@ -1568,15 +1568,15 @@ sub qc_process {
                my $before_trim_len=$trim_len;
                if ($mode =~ /hard/i)
                {
-                   ($s_trimmed,$q_trimmed,$pos5,$pos3)= &hard_trim ($trim_len,$s_trimmed,$q_trimmed,$pos5,$pos3);
+                   ($s_trimmed,$q_trimmed,$pos5,$pos3)= &hard_trim ($trim_len,$s,$q,$pos5,$pos3);
                }
                elsif ($mode =~ /BWA_plus/i)
                {
-                   ($s_trimmed,$q_trimmed,$pos5,$pos3)= &bwa_trim_plus ($trim_len,$s_trimmed,$q_trimmed,$pos5,$pos3);
+                   ($s_trimmed,$q_trimmed,$pos5,$pos3)= &bwa_trim_plus ($trim_len,$s,$q,$pos5,$pos3);
                }
                elsif ($mode =~ /BWA/i)
                {
-                   ($s_trimmed,$q_trimmed,$pos5,$pos3)= &bwa_trim ($trim_len,$s_trimmed,$q_trimmed,$pos5,$pos3);
+                   ($s_trimmed,$q_trimmed,$pos5,$pos3)= &bwa_trim ($trim_len,$s,$q,$pos5,$pos3);
                }
                $trim_len=length($q_trimmed);
                $stats{filter}->{qualTrim}->{basesNum}+= ($before_trim_len - $trim_len);
@@ -1668,21 +1668,21 @@ sub qc_process {
                warn "$r2_h1 sequence length is no equal to quality string length. It will be filtered.\n";
                $drop_2=1;
            }
-           if ($trim_5_end && !$qc_only && ($trim_5_end<=$r2_trim_len))
+           if ($trim_5_end && !$qc_only && ($trim_5_end<$r2_trim_len))
            {
                $r2_s_trimmed=substr($r2_s_trimmed,$trim_5_end);
                $r2_q_trimmed=substr($r2_q_trimmed,$trim_5_end);
                $r2_trim_len = length ($r2_s_trimmed);
                $pos5=$pos5+$trim_5_end;
            }
-           if ($trim_3_end && !$qc_only && ($trim_3_end<=$r2_trim_len))
+           if ($trim_3_end && !$qc_only && ($trim_3_end<$r2_trim_len))
            {
                $r2_s_trimmed=substr($r2_s_trimmed,0,$r2_trim_len-$trim_3_end);
                $r2_q_trimmed=substr($r2_q_trimmed,0,$r2_trim_len-$trim_3_end);
                $r2_trim_len = length ($r2_s_trimmed);
                $pos3=$pos3 - $trim_3_end;
            }
-           if ($r2_trim_len < $opt_min_L || $r2_trim_len == 0)
+           if ($r2_trim_len < $opt_min_L || $r2_trim_len == 0 || $r2_trim_len <= ($trim_5_end + $trim_3_end) )
            {
                $stats{filter}->{len}->{readsNum}++;
                $stats{filter}->{len}->{basesNum}+=$r2_trim_len;
@@ -1703,15 +1703,15 @@ sub qc_process {
                    my $before_trim_len=$r2_trim_len;
                    if ($mode =~ /hard/i)
                    {
-                       ($r2_s_trimmed, $r2_q_trimmed, $pos5, $pos3)=&hard_trim ($r2_trim_len,$r2_s_trimmed,$r2_q_trimmed,$pos5,$pos3);
+                       ($r2_s_trimmed, $r2_q_trimmed, $pos5, $pos3)=&hard_trim ($r2_trim_len,$r2_s,$r2_q,$pos5,$pos3);
                    }
                    elsif ($mode =~ /BWA_plus/i)
                    {
-                       ($r2_s_trimmed, $r2_q_trimmed, $pos5, $pos3)=&bwa_trim_plus ($r2_trim_len,$r2_s_trimmed,$r2_q_trimmed,$pos5,$pos3);
+                       ($r2_s_trimmed, $r2_q_trimmed, $pos5, $pos3)=&bwa_trim_plus ($r2_trim_len,$r2_s,$r2_q,$pos5,$pos3);
                    }
                    elsif ($mode =~ /BWA/i)
                    {
-                       ($r2_s_trimmed, $r2_q_trimmed, $pos5, $pos3)=&bwa_trim ($r2_trim_len,$r2_s_trimmed,$r2_q_trimmed,$pos5,$pos3);
+                       ($r2_s_trimmed, $r2_q_trimmed, $pos5, $pos3)=&bwa_trim ($r2_trim_len,$r2_s,$r2_q,$pos5,$pos3);
                    }
                    $r2_trim_len=length($r2_q_trimmed);
                    $stats{filter}->{qualTrim}->{basesNum}+= ($before_trim_len - $r2_trim_len);
