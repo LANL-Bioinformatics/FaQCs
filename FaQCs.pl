@@ -2451,7 +2451,7 @@ sub read_artifactFile
      while(<ARTIFACT>)
      {
         chomp;
-        if (/^>(\S+)/)
+        if (/^>\s*(\S+)/)
         {
            if ($seq)
            { 
