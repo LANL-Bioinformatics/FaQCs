@@ -22,6 +22,11 @@ COMPILE
   
 ** A FaQCs binary executable will be ready to use and it can be moved to user's or system PATH environment.
 
+** Trimming only comparison (--trim_only)
+
+![comparison](https://github.com/LANL-Bioinformatics/EDGE/blob/gh-pages/images/FaQCs_performance.png)
+
+
 -----------
 BASIC USAGE
 -----------
@@ -33,6 +38,8 @@ BASIC USAGE
 * Quailty check only on subsamples of input, no trimming and filtering. 
 
   $ FaQCs -p reads1.fastq reads2.fastq -d out_directory -qc_only 
+
+
 
 -----------
 FULL USAGE
