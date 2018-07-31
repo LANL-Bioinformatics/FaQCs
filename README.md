@@ -16,7 +16,7 @@ PREREQUISITES
 -------
 COMPILE
 -------
-*  The FaQCs is writtenc in C++ and zlib library is required to complie from source.
+*  The FaQCs is written in C++ and zlib library is required to complie from source.
 
    $ make
   
