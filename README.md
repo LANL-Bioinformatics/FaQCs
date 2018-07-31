@@ -14,7 +14,7 @@ PREREQUISITES
 
 
 -------
-Compile
+COMPILE
 -------
 *  The FaQCs is writtenc in C++ and zlib library is required to complie from source.
 
@@ -35,7 +35,7 @@ BASIC USAGE
   $ FaQCs -p reads1.fastq reads2.fastq -d out_directory -qc_only 
 
 -----------
-Full USAGE
+FULL USAGE
 -----------
 
 ```     
@@ -90,7 +90,7 @@ Options:
 ```
 
 ------------
-Output Files
+OUTPUT FILES
 ------------
 Expected output files
 - QC.1.trimmed.fastq
@@ -101,9 +101,9 @@ Expected output files
 
 [Example qc_report.pdf file](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4246454/bin/12859_2014_366_MOESM1_ESM.pdf)
 
--------------
+--------
 CITATION
--------------
+--------
 
 Chienchi Lo, PatrickS.G. Chain (2014) Rapid evaluation and Quality Control of Next Generation Sequencing Data with FaQCs. [BMC Bioinformatics. 2014 Nov 19;15 ](http://www.ncbi.nlm.nih.gov/pubmed/25408143)
 
