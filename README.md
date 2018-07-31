@@ -18,9 +18,9 @@ COMPILE
 -------
 *  The FaQCs is writtenc in C++ and zlib library is required to complie from source.
 
-  $ make
+   $ make
   
-** A FaQCs binary executable will be ready to use and it can be move to your PATH environment.
+** A FaQCs binary executable will be ready to use and it can be moved to user's or system PATH environment.
 
 -----------
 BASIC USAGE
