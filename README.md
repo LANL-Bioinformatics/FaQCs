@@ -22,6 +22,8 @@ COMPILE
   
 ** A FaQCs binary executable will be ready to use and it can be moved to user's or system PATH environment.
 
+** There are precomplied binary for Mac OSX at bin/MacOSX_x86_64 and for Linux bin/Linux_x86_64_static.
+
 ** Trimming only comparison (--trim_only)
 
 ![comparison](https://github.com/LANL-Bioinformatics/EDGE/blob/gh-pages/images/FaQCs_performance.png)
