@@ -1,4 +1,4 @@
-FaQCs: Quality Control of Next Generation Sequencing Data
+FaQCs: Quality Control of Next Generation Sequencing Data . [![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause) [![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat-square)](http://bioconda.github.io/recipes/faqcs/README.html)
 ===========================================================
 ![3D QC plot](http://oi61.tinypic.com/n36p9x.jpg)
 -------------
@@ -13,20 +13,30 @@ PREREQUISITES
    (http://www.cbcb.umd.edu/software/jellyfish/) 
 
 
--------
-COMPILE
--------
-*  The FaQCs is written in C++ and zlib library is required to complie from source.
+----------------------
+COMPILE / INSTALLATION
+----------------------
+*  The FaQCs is written in C++ and zlib library is required to complie from source. To complie, `cd` into the source direcotry and type `make`
 
+```
+   $ git clone https://github.com/LANL-Bioinformatics/FaQCs.git
+   $ cd FaQCs
    $ make
-  
-** A FaQCs binary executable will be ready to use and it can be moved to user's or system PATH environment.
+ 
+   # A FaQCs binary executable will be ready to use and it can 
+   # be moved to user's or system PATH environment.
+```
 
-** There are precomplied binary for Mac OSX at bin/MacOSX_x86_64 and for Linux bin/Linux_x86_64_static.
-
+* Alternatively, use conda to install
+```   
+   $ conda config --add channels conda-forge
+   $ conda config --add channels bioconda
+   $ conda install faqcs
+```
 ** Trimming only comparison (--trim_only)
 
 ![comparison](https://github.com/LANL-Bioinformatics/EDGE/blob/gh-pages/images/FaQCs_performance.png)
+
 
 
 -----------
