@@ -130,4 +130,4 @@ Chienchi Lo, PatrickS.G. Chain (2014) Rapid evaluation and Quality Control of Ne
 COPYRIGHT
 ---------
 
-Los Alamos National Security, LLC (LANS) owns the copyright to FaQCs, which it identifies internally as LA-CC-14-001. The license is BSD-3. See [LICENSE](https://github.com/LANL-Bioinformatics/FaQCs/blob/v2/LICENSE) for the full text.
+Los Alamos National Security, LLC (LANS) owns the copyright to FaQCs, which it identifies internally as LA-CC-14-001. The license is BSD 3-Clause. See [LICENSE](https://github.com/LANL-Bioinformatics/FaQCs/blob/v2/LICENSE) for the full text.
