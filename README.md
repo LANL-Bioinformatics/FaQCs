@@ -29,9 +29,7 @@ COMPILE / INSTALLATION
 
 * Alternatively, use conda to install
 ```   
-   $ conda config --add channels conda-forge
-   $ conda config --add channels bioconda
-   $ conda install faqcs
+   $ conda install -c bioconda -c conda-forge faqcs
 ```
 ** Trimming only comparison (--trim_only)
 
