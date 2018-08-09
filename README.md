@@ -56,7 +56,7 @@ FULL USAGE
 -----------
 
 ```     
-Usage: FaQCs.pl [options] [-u unpaired.fastq] -p reads1.fastq reads2.fastq -d out_directory
+Usage: FaQCs [options] [-u unpaired.fastq] -p reads1.fastq reads2.fastq -d out_directory
 Version 2.08
 Input File(s):
 	-u			<File> Unpaired reads
