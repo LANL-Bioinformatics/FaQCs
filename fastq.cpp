@@ -60,6 +60,8 @@ bool next_read(gzFile m_fin, string &m_def, string &m_seq, string &m_quality)
 	while(true){
 	
 		if(gzgets(m_fin, buffer, buffer_len) == NULL){
+			
+			cerr << "Error in read: " << m_def << endl;
 			throw __FILE__ ":next_read: Unable to read sequence";
 		}
 
@@ -77,10 +79,14 @@ bool next_read(gzFile m_fin, string &m_def, string &m_seq, string &m_quality)
 	// Skip the '+'. Note that we *don't* actually test to make sure we read a single '+' on a line
 	// by itself.
 	if(gzgets(m_fin, buffer, buffer_len) == NULL){
+		
+		cerr << "Error in read: " << m_def << endl;
 		throw __FILE__ ":next_read: Unable to read '+'";
 	}
 	
 	if( strpbrk(buffer, "\n\r") == NULL ){
+	
+		cerr << "Error in read: " << m_def << endl;
 		throw __FILE__ ":next_read: Error reading '+' delimiter";
 	}
 
@@ -93,6 +99,8 @@ bool next_read(gzFile m_fin, string &m_def, string &m_seq, string &m_quality)
 	while(true){
 	
 		if(gzgets(m_fin, buffer, buffer_len) == NULL){
+			
+			cerr << "Error in read: " << m_def << endl;
 			throw __FILE__ ":next_read: Unable to read quality";
 		}
 
@@ -108,6 +116,8 @@ bool next_read(gzFile m_fin, string &m_def, string &m_seq, string &m_quality)
 	}
 	
 	if( m_seq.size() != m_quality.size() ){
+		
+		cerr << "Error in read: " << m_def << endl;
 		throw __FILE__ ":next_read: |Sequence| != |Quality|";
 	}
 		

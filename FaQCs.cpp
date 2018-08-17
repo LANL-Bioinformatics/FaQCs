@@ -370,10 +370,10 @@ void process_paired(vector<size_t> &m_filter_stats,
 		if(ret1 != ret2){
 
 			if(ret1){
-				cerr << "Found an unmatched read one" << endl;
+				cerr << "Did not find a match to read one: " << r1.def << endl;
 			}
 			else{
-				cerr << "Found an unmatched read two" << endl;
+				cerr << "Did not find a match to read two: " << r2.def << endl;
 			}
 
 			throw __FILE__ "I/O error";

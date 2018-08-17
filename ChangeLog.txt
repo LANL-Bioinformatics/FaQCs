@@ -38,4 +38,7 @@ Version 2.07b (Mar 16, 2018)
 	  vector += function).
 
 Version 2.08 (May 1, 2018)
-	* Fixed a bug in ployA option which required argument should turn off. ( options.cpp)
+	* Fixed a bug due to the "--polyA" command line argument expecting an argument (it should be a boolean flag).
+
+Version 2.09 (Aug 17, 2018)
+	* Added informative error messages to fasta.cpp and FaQCs.cpp to help users diagnose corrupted input files.
