@@ -1,4 +1,4 @@
-FaQCs: Quality Control of Next Generation Sequencing Data . [![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause) [![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat-square)](http://bioconda.github.io/recipes/faqcs/README.html)
+FaQCs: Quality Control of Next Generation Sequencing Data . [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0) [![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat-square)](http://bioconda.github.io/recipes/faqcs/README.html)
 ===========================================================
 ![3D QC plot](http://oi61.tinypic.com/n36p9x.jpg)
 
