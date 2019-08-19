@@ -255,7 +255,7 @@ if __name__ == '__main__':
     mkdir_p(argvs.outdir)
     abs_output = os.path.abspath(argvs.outdir)
     abs_input = os.path.abspath(argvs.dir)
-    logger = log_init(argvs, abs_output,os.path.splitext(__file__)[0])
+    logger = log_init(argvs, abs_output,os.path.splitext(os.path.basename(__file__))[0])
 
     # arguments info
     print_parameters(argvs,FaQCs_Path)
