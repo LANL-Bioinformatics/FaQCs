@@ -281,6 +281,10 @@ if __name__ == '__main__':
     skip=[]
     for index, row in df.iterrows():
         sample_out_dir = row['#SampleID']
+        out_read1 = os.path.join(abs_output,sample_out_dir,'QC.1.trimmed.fastq');
+        out_read2 = os.path.join(abs_output,sample_out_dir,'QC.2.trimmed.fastq');
+        out_single = os.path.join(abs_output,sample_out_dir,'QC.unpaired.trimmed.fastq');
+        out_pdf = os.path.join(abs_output,sample_out_dir,'QC_qc_report.pdf')
         if (',' in row['Files']):
             f_fq,r_fq = row['Files'].split(',')
             #type='pe'
@@ -290,9 +294,11 @@ if __name__ == '__main__':
             if check_file_input(abs_input, f_fq) and check_file_input(abs_input, r_fq):
                 mkdir_p(sample_out_dir)
                 cmd.extend(['-d',sample_out_dir, '-1',os.path.join(abs_input,f_fq),'-2',os.path.join(abs_input,r_fq)])
-                process_cmd(cmd,sample_out_dir)   
-                read1List.append(os.path.join(abs_output,sample_out_dir,'QC.1.trimmed.fastq'))
-                read2List.append(os.path.join(abs_output,sample_out_dir,'QC.2.trimmed.fastq'))
+                if not os.path.isfile(out_read1) and not os.path.isfile(out_read2) and not os.path.isfile(out_pdf):
+                    process_cmd(cmd,sample_out_dir)
+
+                read1List.append(out_read1)
+                read2List.append(out_read2)
                 skip.append('False')
             else:
                 skip.append('True')
@@ -306,8 +312,9 @@ if __name__ == '__main__':
             if check_file_input(abs_input, f_fq):
                 mkdir_p(sample_out_dir)
                 cmd.extend(['-d',sample_out_dir,'-u',os.path.join(abs_input,f_fq)])
-                process_cmd(cmd,sample_out_dir) 
-                read1List.append(os.path.join(abs_output,sample_out_dir,'QC.1.trimmed.fastq'))
+                if not os.path.isfile(out_single) and not os.path.isfile(out_pdf): 
+                    process_cmd(cmd,sample_out_dir) 
+                read1List.append(out_single)
                 skip.append('False')
             else:
                 skip.append('True')
