@@ -52,6 +52,7 @@ def setup_argparse():
     parser.add_argument('--version', action='version', version='%(prog)s v{version}'.format(version=__version__))
     parser.add_argument('--quiet', action='store_true', help='Keep messages in terminal minimal')
     parser.add_argument('--verbose', action='store_true', help='Show more infomration in log')
+    parser.add_argument('--force', action='store_true', help='overwrite existing QC result')
     return parser.parse_args()
 
 def mkdir_p(directory_name):
@@ -294,7 +295,9 @@ if __name__ == '__main__':
             if check_file_input(abs_input, f_fq) and check_file_input(abs_input, r_fq):
                 mkdir_p(sample_out_dir)
                 cmd.extend(['-d',sample_out_dir, '-1',os.path.join(abs_input,f_fq),'-2',os.path.join(abs_input,r_fq)])
-                if not os.path.isfile(out_read1) and not os.path.isfile(out_read2) and not os.path.isfile(out_pdf):
+                if not os.path.isfile(out_read1) or not os.path.isfile(out_read2) or not os.path.isfile(out_pdf):
+                    process_cmd(cmd,sample_out_dir)
+                elif argvs.force :
                     process_cmd(cmd,sample_out_dir)
 
                 read1List.append(out_read1)
@@ -312,7 +315,9 @@ if __name__ == '__main__':
             if check_file_input(abs_input, f_fq):
                 mkdir_p(sample_out_dir)
                 cmd.extend(['-d',sample_out_dir,'-u',os.path.join(abs_input,f_fq)])
-                if not os.path.isfile(out_single) and not os.path.isfile(out_pdf): 
+                if not os.path.isfile(out_single) or not os.path.isfile(out_pdf):
+                    process_cmd(cmd,sample_out_dir)
+                elif argvs.force:
                     process_cmd(cmd,sample_out_dir) 
                 read1List.append(out_single)
                 skip.append('False')
