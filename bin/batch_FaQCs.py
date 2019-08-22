@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 __version__ = "0.1.0"
 __author__    = "Chienchi Lo, Bioscience Division, Los Alamos National Laboratory"
 __date__      = "2019/08/09"
@@ -7,7 +7,9 @@ __license__ = "GPLv3"
 import sys, os, errno, argparse, subprocess, shutil, datetime, time
 import gzip
 import logging
+import log
 import pandas as pd
+import ugetk
 
 script_path = os.path.dirname(os.path.abspath(__file__))
 
@@ -53,6 +55,7 @@ def setup_argparse():
     parser.add_argument('--quiet', action='store_true', help='Keep messages in terminal minimal')
     parser.add_argument('--verbose', action='store_true', help='Show more infomration in log')
     parser.add_argument('--force', action='store_true', help='overwrite existing QC result')
+    parser.add_argument('--uge', action='store_true', help='use uge for parallel QC run')
     return parser.parse_args()
 
 def mkdir_p(directory_name):
@@ -94,51 +97,9 @@ def process_cmd(cmd, msg=''):
 
     if msg:
         logger.info("FaQCs %s" % get_runtime(start))  
+    
+    return 0
             
-def log_init(argvs, path,filename):
-    rootLogger = logging.getLogger(__name__)
-    rootLogger.setLevel(logging.DEBUG)
-    logFormatter = logging.Formatter("%(asctime)s [%(levelname)s]  %(message)s")
-    
-    numeric_level = 20 # logging.INFO
-    if argvs.verbose:
-        numeric_level = 10  #logging.DEBUG
-    fileHandler = logging.FileHandler("{0}/{1}.log".format(path, filename))
-    fileHandler.setLevel(numeric_level)
-    fileHandler.setFormatter(logFormatter)
-    rootLogger.addHandler(fileHandler)
-    
-    if argvs.quiet:
-        numeric_level = 40 #logging.ERROR
-    consoleHandler = logging.StreamHandler()
-    consoleHandler.setLevel(numeric_level)
-    consoleHandler.setFormatter(logFormatter)
-    def decorate_emit(fn):
-        # add methods we need to the class
-        def new(*args):
-            levelno = args[0].levelno
-            if(levelno >= logging.CRITICAL):
-                color = '\x1b[31;1m'
-            elif(levelno >= logging.ERROR):
-                color = '\x1b[31;1m'
-            elif(levelno >= logging.WARNING):
-                color = '\x1b[33;1m'
-            elif(levelno >= logging.INFO):
-                color = '\x1b[32;1m'
-            elif(levelno >= logging.DEBUG):
-                color = '\x1b[35;1m'
-            else:
-                color = '\x1b[0m'
-            # add colored *** in the beginning of the message
-            args[0].levelname = "{0}{1}\x1b[0m".format(color, args[0].levelname)
-            #args[0].msg = "{0}{1}\x1b[0m".format(color, args[0].msg)
-            return fn(*args)
-        return new
-    consoleHandler.emit = decorate_emit(consoleHandler.emit)
-    
-    rootLogger.addHandler(consoleHandler)
-    return rootLogger
-
 def print_parameters(argvs,FaQCs_path):
     logger.info("Batch FaQCs v%s Start", __version__)
     arguments_info="""Arguments:
@@ -184,11 +145,11 @@ def print_parameters(argvs,FaQCs_path):
 def get_FaQCs_cmd(path, argvs):
     FaQCs_cmd = [path, '-q', str(argvs.quality), '--min_L', str(argvs.min_L), '-n',str(argvs.numAmbiguity), '--lc',str(argvs.lc), '-t',str(argvs.cpus)]
     if getattr(argvs, '5end') > 0 :
-        FaQCs_cmd.append(['--5end' + str(getattr(argvs, '5end'))])
+        FaQCs_cmd.extend(['--5end' , str(getattr(argvs, '5end'))])
     if getattr(argvs, '3end') > 0 :
-        FaQCs_cmd.append(['--3end' + str(getattr(argvs, '3end'))])
+        FaQCs_cmd.extend(['--3end' , str(getattr(argvs, '3end'))])
     if argvs.avg_q > 0 :
-        FaQCs_cmd.append(['--avg_q' + str(argvs.avg_q)])
+        FaQCs_cmd.extend(['--avg_q' , str(argvs.avg_q)])
     if argvs.adapter:
         FaQCs_cmd.append('--adapter')
     if argvs.discard:
@@ -256,7 +217,11 @@ if __name__ == '__main__':
     mkdir_p(argvs.outdir)
     abs_output = os.path.abspath(argvs.outdir)
     abs_input = os.path.abspath(argvs.dir)
-    logger = log_init(argvs, abs_output,os.path.splitext(os.path.basename(__file__))[0])
+    logger = logging.getLogger(__name__)
+    log.log_init(logger,
+                 os.path.join(abs_output,os.path.splitext(os.path.basename(__file__))[0]+'.log'),
+                 verbose=argvs.verbose,
+                 quiet=argvs.quiet)
 
     # arguments info
     print_parameters(argvs,FaQCs_Path)
@@ -280,12 +245,20 @@ if __name__ == '__main__':
     read1List=[]
     read2List=[]
     skip=[]
+    jobids = []
     for index, row in df.iterrows():
         sample_out_dir = row['#SampleID']
         out_read1 = os.path.join(abs_output,sample_out_dir,'QC.1.trimmed.fastq');
         out_read2 = os.path.join(abs_output,sample_out_dir,'QC.2.trimmed.fastq');
         out_single = os.path.join(abs_output,sample_out_dir,'QC.unpaired.trimmed.fastq');
         out_pdf = os.path.join(abs_output,sample_out_dir,'QC_qc_report.pdf')
+        jid = None
+        if argvs.uge:
+            jobname= "FaQCs"+ row['#SampleID']
+            mem='10G'
+            cpu = argvs.cpus
+            qlog = os.path.join(abs_output,'uge.log')
+            email = None
         if (',' in row['Files']):
             f_fq,r_fq = row['Files'].split(',')
             #type='pe'
@@ -296,13 +269,18 @@ if __name__ == '__main__':
                 mkdir_p(sample_out_dir)
                 cmd.extend(['-d',sample_out_dir, '-1',os.path.join(abs_input,f_fq),'-2',os.path.join(abs_input,r_fq)])
                 if not os.path.isfile(out_read1) or not os.path.isfile(out_read2) or not os.path.isfile(out_pdf):
-                    process_cmd(cmd,sample_out_dir)
-                elif argvs.force :
-                    process_cmd(cmd,sample_out_dir)
+                    jid = ugetk.qsub(cmd,jobname,mem,cpu,qlog,email) if argvs.uge else process_cmd(cmd,sample_out_dir)
+                else:
+                    if argvs.force :
+                        jid = ugetk.qsub(cmd,jobname,mem,cpu,qlog,email) if argvs.uge else process_cmd(cmd,sample_out_dir)
+                    else:
+                        logger.info("Result exist. Skip FaQCs for " + sample_out_dir )
 
                 read1List.append(out_read1)
                 read2List.append(out_read2)
                 skip.append('False')
+                if jid is not None:
+                    jobids.append(jid)
             else:
                 skip.append('True')
                 read1List.append(os.path.join(abs_input, f_fq))
@@ -312,28 +290,55 @@ if __name__ == '__main__':
             f_fq = row['Files']
             read2List.append("")
             #type='se'
+            #print(mem)
             if check_file_input(abs_input, f_fq):
                 mkdir_p(sample_out_dir)
                 cmd.extend(['-d',sample_out_dir,'-u',os.path.join(abs_input,f_fq)])
-                if not os.path.isfile(out_single) or not os.path.isfile(out_pdf):
-                    process_cmd(cmd,sample_out_dir)
-                elif argvs.force:
-                    process_cmd(cmd,sample_out_dir) 
+                if not os.path.isfile(out_single) or not os.path.isfile(out_pdf): 
+                    jid = ugetk.qsub(cmd,jobname,mem,cpu,qlog,email) if argvs.uge else process_cmd(cmd,sample_out_dir)
+                else: 
+                    if argvs.force:
+                        jid = ugetk.qsub(cmd,jobname,mem,cpu,qlog,email) if argvs.uge else process_cmd(cmd,sample_out_dir)
+                    else:
+                        logger.info("Result exist. Skip FaQCs for " + sample_out_dir )
                 read1List.append(out_single)
                 skip.append('False')
+                if jid is not None:
+                    jobids.append(jid);
             else:
                 skip.append('True')
                 read1List.append(os.path.join(abs_input, f_fq))
                 logger.info("Skip FaQCs for " + sample_out_dir )
 
-    
+    logger.info("Total Num of Sample: %d" % len(df))
+
+    if argvs.uge:
+       logger.info("Wait for submitted %d jobs ..." % len(jobids))
+       ugetk.qwait_all(jobids)
     df['Skip_FaQCs'] = skip
     df['read1'] = read1List
     df['read2'] = read2List
     out_for_newfof = os.path.join(abs_output,"snippy_input.tab")
-    df.to_csv(out_for_newfof,sep="\t",index=None, header=False,columns= ['#SampleID', 'read1','read2'])
+    with open (out_for_newfof, "w") as f:
+        for index, row in df.iterrows():
+            sample_out_dir = row['#SampleID']
+            out_read1 = os.path.join(abs_output,sample_out_dir,'QC.1.trimmed.fastq');
+            out_read2 = os.path.join(abs_output,sample_out_dir,'QC.2.trimmed.fastq');
+            out_single = os.path.join(abs_output,sample_out_dir,'QC.unpaired.trimmed.fastq');
+            out_pdf = os.path.join(abs_output,sample_out_dir,'QC_qc_report.pdf')
+            #if os.path.isfile(out_read1) and os.path.isfile(out_read2) and os.path.isfile(out_pdf):
+            if os.path.isfile(out_read1) and os.path.isfile(out_read2):
+                w_string = "\t".join([row['#SampleID'],out_read1,out_read2]);
+            #elif os.path.isfile(out_read1) and os.path.isfile(out_pdf):
+            elif os.path.isfile(out_single):
+                w_string = "\t".join([row['#SampleID'],out_read1])
+            else:
+                logger.warning("FaQCs may fail on %s" % row['#SampleID'])
+            f.write(w_string + "\n")
+        f.close()
+        
+    #df.to_csv(out_for_newfof,sep="\t",index=None, header=False,columns= ['#SampleID', 'read1','read2'])
     
-    logger.info("Total Num of Sample: %d" % len(df))
     logger.info("Num of Sample by FaQCs: %d" % df.Skip_FaQCs.value_counts().loc['False'])
     totol_runtime = "Total %s" % get_runtime(begin_t)
     logger.info(totol_runtime)
