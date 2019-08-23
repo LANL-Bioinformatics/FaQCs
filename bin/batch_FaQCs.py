@@ -338,7 +338,7 @@ if __name__ == '__main__':
                 w_string = "\t".join([row['#SampleID'],out_read1,out_read2])
             #elif os.path.isfile(out_read1) and os.path.isfile(out_pdf):
             elif os.path.isfile(out_single):
-                w_string = "\t".join([row['#SampleID'],out_read1])
+                w_string = "\t".join([row['#SampleID'],out_single])
             elif row['Skip_FaQCs'] is True and row['read1'] is not None:
                 w_string = "\t".join([row['#SampleID'],row['read1']])
             else:
