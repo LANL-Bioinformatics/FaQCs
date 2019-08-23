@@ -53,11 +53,12 @@ def qwait_all(idlist):
             elif (time.time() - int(job_status)) > QSUB_TIMELIMIT:
                 job_exit += 1
                 qdel(jid)
-                ugeLogge.error("Time out on job id %s" % jid)
-
+                ugeLogger.error("Time out on job id %s" % jid)
+      
         if len(idlist) == job_exit or not idlist:
             break
-        time.sleep(5)
+        time.sleep(60)
+        ugeLogger.debug("Num of finished Job: %d" % job_exit)
     
     return
 
@@ -71,7 +72,7 @@ def qwait(jid):
         elif (time.time() - int(jobstatus)) > QSUB_TIMELIMIT:
             job_exit += 1
             qdel(jid)
-            ugeLogge.error("Time out on job id %d" % jid)
+            ugeLogger.error("Time out on job id %d" % jid)
 
         if job_exit == 1 or not jid:
             break
@@ -84,7 +85,7 @@ def qdel(jobid):
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     outs, errs = proc.communicate()
     if proc.returncode != 0:
-        ugeLogge.error("Failed %d %s %s" % (proc.returncode, outs, errs))
+        ugeLogger.error("Failed %d %s %s" % (proc.returncode, outs, errs))
 
 def qstat(jobid):
     cmd = QSTAT_COMMAND.copy()
@@ -92,7 +93,7 @@ def qstat(jobid):
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     outs, errs = proc.communicate()
     if proc.returncode != 0:
-        ugeLogge.error("Failed %d %s %s" % (proc.returncode, outs, errs))
+        ugeLogger.error("Failed %d %s %s" % (proc.returncode, outs, errs))
     
     dom = minidom.parseString(outs.decode())
     start_time_dom=dom.getElementsByTagName('JAT_start_time')
