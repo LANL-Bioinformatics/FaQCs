@@ -191,7 +191,7 @@ def get_sequence_file_type(filename):
             return 'FASTQ'
     
 def check_file_input(dir, filename):
-    correct = False
+    seqformat = "Unknown"
     path_to_file = os.path.join(dir,filename)
     if not os.path.isfile(path_to_file):
         logger.error('could not find ' + filename)
@@ -199,13 +199,14 @@ def check_file_input(dir, filename):
     fileformat = get_sequence_file_type(path_to_file)
     if fileformat == "FASTA" : 
         logger.warning(filename + ' is in FASTA format')
+        seqformat ="FASTA"
     elif fileformat == "FASTQ" : 
         logger.debug(filename + ' is in FASTQ format')
-        correct = True
+        seqformat = "FASTQ"
     else:
-        logger.error('File is neither FASTA or FASTQ')
+        logger.error("File %s is neither FASTA or FASTQ" % filename)
 
-    return correct
+    return seqformat
 
 
 if __name__ == '__main__':
@@ -248,9 +249,9 @@ if __name__ == '__main__':
     jobids = []
     for index, row in df.iterrows():
         sample_out_dir = row['#SampleID']
-        out_read1 = os.path.join(abs_output,sample_out_dir,'QC.1.trimmed.fastq');
-        out_read2 = os.path.join(abs_output,sample_out_dir,'QC.2.trimmed.fastq');
-        out_single = os.path.join(abs_output,sample_out_dir,'QC.unpaired.trimmed.fastq');
+        out_read1 = os.path.join(abs_output,sample_out_dir,'QC.1.trimmed.fastq')
+        out_read2 = os.path.join(abs_output,sample_out_dir,'QC.2.trimmed.fastq')
+        out_single = os.path.join(abs_output,sample_out_dir,'QC.unpaired.trimmed.fastq')
         out_pdf = os.path.join(abs_output,sample_out_dir,'QC_qc_report.pdf')
         jid = None
         if argvs.uge:
@@ -265,7 +266,7 @@ if __name__ == '__main__':
             if f_fq == r_fq:
                 logger.error('first and second read pair files cannot be the same file')
 
-            if check_file_input(abs_input, f_fq) and check_file_input(abs_input, r_fq):
+            if check_file_input(abs_input, f_fq) == "FASTQ"  and check_file_input(abs_input, r_fq) == "FASTQ":
                 mkdir_p(sample_out_dir)
                 cmd.extend(['-d',sample_out_dir, '-1',os.path.join(abs_input,f_fq),'-2',os.path.join(abs_input,r_fq)])
                 if not os.path.isfile(out_read1) or not os.path.isfile(out_read2) or not os.path.isfile(out_pdf):
@@ -281,17 +282,18 @@ if __name__ == '__main__':
                 skip.append('False')
                 if jid is not None:
                     jobids.append(jid)
-            else:
+            else: # Not FASTQ pe.  Please check
                 skip.append('True')
                 read1List.append(os.path.join(abs_input, f_fq))
                 read2List.append(os.path.join(abs_input, r_fq))
-                logger.info("Skip FaQCs for " + sample_out_dir )
+                logger.info("Not paired-end reads in FASTQ format. Skip FaQCs for " + sample_out_dir )
         else:
             f_fq = row['Files']
             read2List.append("")
             #type='se'
             #print(mem)
-            if check_file_input(abs_input, f_fq):
+            se_format = check_file_input(abs_input, f_fq)
+            if se_format == "FASTQ":
                 mkdir_p(sample_out_dir)
                 cmd.extend(['-d',sample_out_dir,'-u',os.path.join(abs_input,f_fq)])
                 if not os.path.isfile(out_single) or not os.path.isfile(out_pdf): 
@@ -305,10 +307,15 @@ if __name__ == '__main__':
                 skip.append('False')
                 if jid is not None:
                     jobids.append(jid);
-            else:
+            elif se_format == "FASTA":
                 skip.append('True')
                 read1List.append(os.path.join(abs_input, f_fq))
                 logger.info("Skip FaQCs for " + sample_out_dir )
+            else:
+                skip.append('True')
+                read1List.append(None)
+                logger.info("Skip FaQCs for " + sample_out_dir )
+
 
     logger.info("Total Num of Sample: %d" % len(df))
 
@@ -322,16 +329,18 @@ if __name__ == '__main__':
     with open (out_for_newfof, "w") as f:
         for index, row in df.iterrows():
             sample_out_dir = row['#SampleID']
-            out_read1 = os.path.join(abs_output,sample_out_dir,'QC.1.trimmed.fastq');
-            out_read2 = os.path.join(abs_output,sample_out_dir,'QC.2.trimmed.fastq');
-            out_single = os.path.join(abs_output,sample_out_dir,'QC.unpaired.trimmed.fastq');
+            out_read1 = os.path.join(abs_output,sample_out_dir,'QC.1.trimmed.fastq')
+            out_read2 = os.path.join(abs_output,sample_out_dir,'QC.2.trimmed.fastq')
+            out_single = os.path.join(abs_output,sample_out_dir,'QC.unpaired.trimmed.fastq')
             out_pdf = os.path.join(abs_output,sample_out_dir,'QC_qc_report.pdf')
             #if os.path.isfile(out_read1) and os.path.isfile(out_read2) and os.path.isfile(out_pdf):
             if os.path.isfile(out_read1) and os.path.isfile(out_read2):
-                w_string = "\t".join([row['#SampleID'],out_read1,out_read2]);
+                w_string = "\t".join([row['#SampleID'],out_read1,out_read2])
             #elif os.path.isfile(out_read1) and os.path.isfile(out_pdf):
             elif os.path.isfile(out_single):
                 w_string = "\t".join([row['#SampleID'],out_read1])
+            elif row['Skip_FaQCs'] is True and row['read1'] is not None:
+                w_string = "\t".join([row['#SampleID'],row['read1']])
             else:
                 logger.warning("FaQCs may fail on %s" % row['#SampleID'])
             f.write(w_string + "\n")
