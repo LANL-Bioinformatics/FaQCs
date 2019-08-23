@@ -242,12 +242,12 @@ if __name__ == '__main__':
     if 'Files' not in df.columns:
         sys.exit("[ERROR] 'Files' column not found in meta data mapping file.")
 
-    cmd = get_FaQCs_cmd(FaQCs_Path,argvs)
     read1List=[]
     read2List=[]
     skip=[]
     jobids = []
     for index, row in df.iterrows():
+        cmd = get_FaQCs_cmd(FaQCs_Path,argvs)
         sample_out_dir = row['#SampleID']
         out_read1 = os.path.join(abs_output,sample_out_dir,'QC.1.trimmed.fastq')
         out_read2 = os.path.join(abs_output,sample_out_dir,'QC.2.trimmed.fastq')
