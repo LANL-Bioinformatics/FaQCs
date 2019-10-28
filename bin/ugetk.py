@@ -26,7 +26,7 @@ def qsub(cmd, jobname=None, mem='10G', cpu=4, log=None, email=None):
     qsub_cmd.extend(['-l' ,'h_vmem='+ mem + ',mem_free='+mem] )    
         
     qsub_cmd.extend(cmd)
-    ugeLogger.debug(qsub_cmd)
+    ugeLogger.info(" ".join(qsub_cmd))
     proc = subprocess.Popen(qsub_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     outs, errs = proc.communicate()
     if proc.returncode != 0:
@@ -46,11 +46,11 @@ def qwait_all(idlist):
             if jid in exitIDs:
                 job_exit += 1
             # get job start time if not the job is not exist
-            job_status = qstat(jid)
-            if job_status is None:
+            job_start_t, job_submit_t = qstat(jid)
+            if job_start_t is None and job_submit_t is None:
                 job_exit += 1
                 exitIDs[jid] = True
-            elif (time.time() - int(job_status)) > QSUB_TIMELIMIT:
+            elif job_start_t is not None and (time.time() - int(job_start_t)) > QSUB_TIMELIMIT:
                 job_exit += 1
                 qdel(jid)
                 ugeLogger.error("Time out on job id %s" % jid)
@@ -66,10 +66,10 @@ def qwait(jid):
     
     while True:
         job_exit=0
-        job_status = qstat(jid)
-        if job_status is None:
+        job_start_t, job_submit_t = qstat(jid)
+        if job_start_t is None and job_submit_t is None:
             job_exit += 1
-        elif (time.time() - int(jobstatus)) > QSUB_TIMELIMIT:
+        elif job_start_t is not None and (time.time() - int(job_start_t)) > QSUB_TIMELIMIT:
             job_exit += 1
             qdel(jid)
             ugeLogger.error("Time out on job id %d" % jid)
@@ -97,5 +97,7 @@ def qstat(jobid):
     
     dom = minidom.parseString(outs.decode())
     start_time_dom=dom.getElementsByTagName('JAT_start_time')
+    sub_time_dom=dom.getElementsByTagName('JB_submission_time')
     start_time = start_time_dom[0].firstChild.nodeValue if start_time_dom else None 
-    return start_time
+    sub_time=sub_time_dom[0].firstChild.nodeValue if sub_time_dom else None
+    return start_time, sub_time
