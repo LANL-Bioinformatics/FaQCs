@@ -11,9 +11,15 @@ QSTAT_COMMAND=['qstat', '-xml','-j']
 QDEL_COMMAND=['qdel', '-j']
 
 ugeLogger = logging.getLogger(__name__)
-log.log_init(ugeLogger)
+
+try:
+    import log
+    log.log_init(ugeLogger)
+except ImportError:
+    ugeLogger.debug("No Log module")
+
 #ugeLogger=log.log_init()
-def qsub(cmd, jobname=None, mem='10G', cpu=4, log=None, email=None):
+def qsub(cmd, jobname=None, mem='10G', cpu=4, log=None, email=None, priority=-10):
     qsub_cmd = QSUB_COMMAND.copy();
 
     if jobname is not None:
@@ -22,6 +28,7 @@ def qsub(cmd, jobname=None, mem='10G', cpu=4, log=None, email=None):
         qsub_cmd.extend(['-o',log])
     if email is not None:
         qsub_cmd.extend(['-m', 'abe', '-M', email])
+    qsub_cmd.extend(['-p', str(priority)])
     qsub_cmd.extend(['-pe', 'smp',str(cpu)])    
     qsub_cmd.extend(['-l' ,'h_vmem='+ mem + ',mem_free='+mem] )    
         
