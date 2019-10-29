@@ -48,6 +48,7 @@ def setup_argparse():
     optGrp.add_argument('--trimOnly', action='store_true', help='No quality report. Output trimmed reads only.')
     optGrp.add_argument('--5trim_off', action='store_true', help='Turn off trimming from 5\'end.')
     optGrp.add_argument('--qcOnly', action='store_true', help='no Filters, no Trimming, report numbers.')
+    optGrp.add_argument('--kmerRarefaction', action='store_true', help='Turn on the kmer calculation. Turn on will slow down ~10 times.')
 
     optGrp.add_argument('-c', '--cpus', metavar='<INT>', default=8, type=int, help='Number of CPUS')
 
@@ -103,24 +104,25 @@ def process_cmd(cmd, msg=''):
 def print_parameters(argvs,FaQCs_path):
     logger.info("Batch FaQCs v%s Start", __version__)
     arguments_info="""Arguments:
-        Mapping File   :  %s
-        Input Path     :  %s
-        Output Path    :  %s    
-        Quality Level  :  %d
-        5'end trim     :  %d bp
-        3'end trim     :  %d bp
-        Minimum Len    :  %d
-        Mean quality   :  %d
-        Num Ambiguity  :  %d
-        Low Complexity :  %.2f
-        Filter Adapter :  %s
-        Output discard :  %s
-        Trim only      :  %s
-        5'Trim off     :  %s
-        QC only        :  %s
-        CPU Number     :  %d
-        FaQCs Path     :  %s
-        FaQCs Version  :  %s
+        Mapping File    :  %s
+        Input Path      :  %s
+        Output Path     :  %s    
+        Quality Level   :  %d
+        5'end trim      :  %d bp
+        3'end trim      :  %d bp
+        Minimum Len     :  %d
+        Mean quality    :  %d
+        Num Ambiguity   :  %d
+        Low Complexity  :  %.2f
+        Filter Adapter  :  %s
+        Output discard  :  %s
+        Trim only       :  %s
+        5'Trim off      :  %s
+        QC only         :  %s
+        Kmer Rarefaction:  %s
+        CPU Number      :  %d
+        FaQCs Path      :  %s
+        FaQCs Version   :  %s
     """ % (argvs.mappingFile, 
            argvs.dir,
            os.path.abspath(argvs.outdir), 
@@ -136,6 +138,7 @@ def print_parameters(argvs,FaQCs_path):
            argvs.trimOnly,
            getattr(argvs, '5trim_off'),
            argvs.qcOnly,
+           argvs.kmerRarefaction,
            argvs.cpus, 
            dependency_check("FaQCs"),
            tool_version_check([FaQCs_path , '--version']))
@@ -143,7 +146,7 @@ def print_parameters(argvs,FaQCs_path):
     logger.info(arguments_info)
 
 def get_FaQCs_cmd(path, argvs):
-    FaQCs_cmd = [path, '-q', str(argvs.quality), '--min_L', str(argvs.min_L), '-n',str(argvs.numAmbiguity), '--lc',str(argvs.lc), '-t',str(argvs.cpus)]
+    FaQCs_cmd = [path, '--ascii 33','-q', str(argvs.quality), '--min_L', str(argvs.min_L), '-n',str(argvs.numAmbiguity), '--lc',str(argvs.lc), '-t',str(argvs.cpus)]
     if getattr(argvs, '5end') > 0 :
         FaQCs_cmd.extend(['--5end' , str(getattr(argvs, '5end'))])
     if getattr(argvs, '3end') > 0 :
@@ -160,6 +163,8 @@ def get_FaQCs_cmd(path, argvs):
         FaQCs_cmd.append('--5trim_off')
     if argvs.qcOnly:
         FaQCs_cmd.append('--qc_only')
+    if argvs.kmerRarefaction:
+        FaQCs_cmd.append('--kmer_rarefaction')
     
     return FaQCs_cmd
 
@@ -268,9 +273,10 @@ if __name__ == '__main__':
 
             if check_file_input(abs_input, f_fq) == "FASTQ"  and check_file_input(abs_input, r_fq) == "FASTQ":
                 mkdir_p(sample_out_dir)
-                cmd.extend(['-d',sample_out_dir, '-1',os.path.join(abs_input,f_fq),'-2',os.path.join(abs_input,r_fq)])
+                cmd.extend(['-d', "'{0}'".format(sample_out_dir), '-1',"'{0}'".format(os.path.join(abs_input,f_fq)),'-2',"'{0}'".format(os.path.join(abs_input,r_fq))])
                 if not os.path.isfile(out_read1) or not os.path.isfile(out_read2) or not os.path.isfile(out_pdf):
                     jid = ugetk.qsub(cmd,jobname,mem,cpu,qlog,email) if argvs.uge else process_cmd(cmd,sample_out_dir)
+                    #logger.info("%s Not qc" % row['#SampleID'])
                 else:
                     if argvs.force :
                         jid = ugetk.qsub(cmd,jobname,mem,cpu,qlog,email) if argvs.uge else process_cmd(cmd,sample_out_dir)
@@ -279,11 +285,11 @@ if __name__ == '__main__':
 
                 read1List.append(out_read1)
                 read2List.append(out_read2)
-                skip.append('False')
+                skip.append(False)
                 if jid is not None:
                     jobids.append(jid)
             else: # Not FASTQ pe.  Please check
-                skip.append('True')
+                skip.append(True)
                 read1List.append(os.path.join(abs_input, f_fq))
                 read2List.append(os.path.join(abs_input, r_fq))
                 logger.info("Not paired-end reads in FASTQ format. Skip FaQCs for " + sample_out_dir )
@@ -295,24 +301,25 @@ if __name__ == '__main__':
             se_format = check_file_input(abs_input, f_fq)
             if se_format == "FASTQ":
                 mkdir_p(sample_out_dir)
-                cmd.extend(['-d',sample_out_dir,'-u',os.path.join(abs_input,f_fq)])
+                cmd.extend(['-d',"'{0}'".format(sample_out_dir),'-u',"'{0}'".format(os.path.join(abs_input,f_fq))])
                 if not os.path.isfile(out_single) or not os.path.isfile(out_pdf): 
                     jid = ugetk.qsub(cmd,jobname,mem,cpu,qlog,email) if argvs.uge else process_cmd(cmd,sample_out_dir)
+                    #logger.info("%s Not qc" % row['#SampleID'])
                 else: 
                     if argvs.force:
                         jid = ugetk.qsub(cmd,jobname,mem,cpu,qlog,email) if argvs.uge else process_cmd(cmd,sample_out_dir)
                     else:
                         logger.info("Result exist. Skip FaQCs for " + sample_out_dir )
                 read1List.append(out_single)
-                skip.append('False')
+                skip.append(False)
                 if jid is not None:
                     jobids.append(jid);
             elif se_format == "FASTA":
-                skip.append('True')
+                skip.append(True)
                 read1List.append(os.path.join(abs_input, f_fq))
                 logger.info("Skip FaQCs for " + sample_out_dir )
             else:
-                skip.append('True')
+                skip.append(True)
                 read1List.append(None)
                 logger.info("Skip FaQCs for " + sample_out_dir )
 
@@ -325,6 +332,7 @@ if __name__ == '__main__':
     df['Skip_FaQCs'] = skip
     df['read1'] = read1List
     df['read2'] = read2List
+    #df.to_excel("out.xlsx")
     out_for_newfof = os.path.join(abs_output,"snippy_input.tab")
     with open (out_for_newfof, "w") as f:
         for index, row in df.iterrows():
@@ -342,13 +350,16 @@ if __name__ == '__main__':
             elif row['Skip_FaQCs'] is True and row['read1'] is not None:
                 w_string = "\t".join([row['#SampleID'],row['read1']])
             else:
+                w_string = None
                 logger.warning("FaQCs may fail on %s" % row['#SampleID'])
-            f.write(w_string + "\n")
+
+            if w_string is not None:
+                f.write(w_string + "\n")
         f.close()
         
     #df.to_csv(out_for_newfof,sep="\t",index=None, header=False,columns= ['#SampleID', 'read1','read2'])
     
-    logger.info("Num of Sample by FaQCs: %d" % df.Skip_FaQCs.value_counts().loc['False'])
+    logger.info("Num of Sample by FaQCs: %d" % df.Skip_FaQCs.value_counts().loc[False])
     totol_runtime = "Total %s" % get_runtime(begin_t)
     logger.info(totol_runtime)
     if argvs.quiet:

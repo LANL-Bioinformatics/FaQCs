@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 
-import sys, os, subprocess, time , re
+import sys, os, subprocess, time , re, shlex
 from xml.dom import minidom
 import logging
-import log
 # 172800s  = 48 hours
 QSUB_TIMELIMIT=172800
 QSUB_COMMAND=['qsub','-V','-b', 'y', '-j', 'y','-cwd']  
@@ -19,6 +18,7 @@ except ImportError:
     ugeLogger.debug("No Log module")
 
 #ugeLogger=log.log_init()
+# cmd is list
 def qsub(cmd, jobname=None, mem='10G', cpu=4, log=None, email=None, priority=-10):
     qsub_cmd = QSUB_COMMAND.copy();
 
@@ -32,14 +32,14 @@ def qsub(cmd, jobname=None, mem='10G', cpu=4, log=None, email=None, priority=-10
     qsub_cmd.extend(['-pe', 'smp',str(cpu)])    
     qsub_cmd.extend(['-l' ,'h_vmem='+ mem + ',mem_free='+mem] )    
         
-    qsub_cmd.extend(cmd)
+    cmd=('"{0}"'.format(" ".join(cmd)))
+    qsub_cmd.extend([cmd])
     ugeLogger.info(" ".join(qsub_cmd))
-    proc = subprocess.Popen(qsub_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    outs, errs = proc.communicate()
+    proc = subprocess.run(shlex.split(" ".join(qsub_cmd)), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if proc.returncode != 0:
-        ugeLogger.error("Failed %d %s %s" % (proc.returncode, outs, errs))
+        ugeLogger.error("Failed %d %s %s" % (proc.returncode, proc.stdout, proc.stderr))
 
-    m = re.match(r"Your job (\d+)", outs.decode())
+    m = re.match(r"Your job (\d+)", proc.stdout.decode())
     jobid = m.group(1) 
 
     return jobid
