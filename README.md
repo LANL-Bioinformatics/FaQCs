@@ -1,6 +1,7 @@
 FaQCs: Quality Control of Next Generation Sequencing Data . [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0) [![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat-square)](http://bioconda.github.io/recipes/faqcs/README.html)
 ===========================================================
-![3D QC plot](http://oi61.tinypic.com/n36p9x.jpg)
+![3D QC plot](https://user-images.githubusercontent.com/737589/75397395-f1f55980-58b3-11ea-8f0c-53beda8a7dec.png)
+
 
 #### FaQCs versions 2.x was rewritten by Jason Gans (jgans at lanl.gov) wiht C++. It speeds up more than 10x compared to version 1.x in Perl script.
 
