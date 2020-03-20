@@ -7,7 +7,7 @@
 #include <limits.h>
 #include "matrix.h"
 
-#define FaQCs_VERSION	"2.08"
+#define FaQCs_VERSION	"2.09"
 
 #define	AUTO_DETECT_QUALITY_OFFSET	SCHAR_MIN
 
