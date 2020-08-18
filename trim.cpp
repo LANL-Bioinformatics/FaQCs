@@ -75,83 +75,82 @@ void trim(vector<Read> &m_buffer,
 		
 	#pragma omp parallel
 	{
+		// Accumulate filtering statistics in local buffers that will
+		// later be merged to accumulate global statistics
+		vector<size_t> local_filter_stats(FilterStat::NUM_STAT);
+		MAP< string, pair<size_t /*read*/, size_t /*base*/> > local_adapter_stats;
+		MAP<Word, size_t> local_kmer_table;
 		
-		try{
-			// Accumulate filtering statistics in local buffers that will
-			// later be merged to accumulate global statistics
-			vector<size_t> local_filter_stats(FilterStat::NUM_STAT);
-			MAP< string, pair<size_t /*read*/, size_t /*base*/> > local_adapter_stats;
-			MAP<Word, size_t> local_kmer_table;
-			
-			PlotInfo local_info;
-			
-			if(m_opt.filter_adapter || m_opt.filter_phiX){
-				trim_adapters_and_phiX(m_buffer, local_adapter_stats, m_opt);
-			}
-			
-			#pragma omp for
-			for(unsigned int i = 0;i < buffer_size;++i){
+		PlotInfo local_info;
+		
+		if(m_opt.filter_adapter || m_opt.filter_phiX){
+			trim_adapters_and_phiX(m_buffer, local_adapter_stats, m_opt);
+		}
+		
+		#pragma omp for
+		for(unsigned int i = 0;i < buffer_size;++i){
 
-				// A reference to the i^th read
-				Read &r = m_buffer[i];
-				
+			// A reference to the i^th read
+			Read &r = m_buffer[i];
+			
+			try{
 				const bool valid = trim_read(
 					r,
 					local_filter_stats,
 					local_kmer_table,
 					local_info, m_opt);
-					
+				
 				if(!valid){
 					r.seq = r.qual = "";
 				}
 			}
-			
-			// Update the statistics
-			#pragma omp critical
-			{
-				m_filter_stats += local_filter_stats;
-				
-				for(MAP< string, pair<size_t, size_t> >::const_iterator i = local_adapter_stats.begin();
-					i != local_adapter_stats.end();++i){
-					
-					pair<size_t, size_t> &ref = m_adapter_stats[i->first];
-					
-					ref.first += i->second.first;
-					ref.second += i->second.second;
-				}
-			
-				for(MAP<Word, size_t>::const_iterator i = local_kmer_table.begin();i != local_kmer_table.end();++i){
-					m_kmer_table[i->first] += i->second;
-				}
-		
-				m_info.pre_quality_matrix += local_info.pre_quality_matrix;
-				m_info.post_quality_matrix += local_info.post_quality_matrix;
-				
-				m_info.pre_base_matrix += local_info.pre_base_matrix;
-				m_info.post_base_matrix += local_info.post_base_matrix;
-					
-				m_info.pre_read_quality_histogram += local_info.pre_read_quality_histogram;
-				m_info.post_read_quality_histogram += local_info.post_read_quality_histogram;
-				
-				m_info.pre_base_quality_histogram += local_info.pre_base_quality_histogram;
-				m_info.post_base_quality_histogram += local_info.post_base_quality_histogram;
-				
-				m_info.pre_nuc_composition += local_info.pre_nuc_composition;
-				m_info.post_nuc_composition += local_info.post_nuc_composition;
-				
-				m_info.pre_length_histogram += local_info.pre_length_histogram;
-				m_info.post_length_histogram += local_info.post_length_histogram;
+			catch(const char *error){
+
+				cerr << "Error: " << error << endl;
+				throw error;
+			}
+			catch(...){
+
+				cerr << "Caught an unhandled error in trim()" << endl;
+				throw __FILE__ ":trim: Caught an unhandled error";
 			}
 		}
-		catch(const char *error){
-
-			cerr << "Error: " << error << endl;
-			throw error;
-		}
-		catch(...){
-
-			cerr << "Caught an unhandled error in trim()" << endl;
-			throw __FILE__ ":trim: Caught an unhandled error";
+		
+		// Update the statistics
+		#pragma omp critical
+		{
+			m_filter_stats += local_filter_stats;
+			
+			for(MAP< string, pair<size_t, size_t> >::const_iterator i = local_adapter_stats.begin();
+				i != local_adapter_stats.end();++i){
+				
+				pair<size_t, size_t> &ref = m_adapter_stats[i->first];
+				
+				ref.first += i->second.first;
+				ref.second += i->second.second;
+			}
+		
+			for(MAP<Word, size_t>::const_iterator i = local_kmer_table.begin();i != local_kmer_table.end();++i){
+				m_kmer_table[i->first] += i->second;
+			}
+	
+			m_info.pre_quality_matrix += local_info.pre_quality_matrix;
+			m_info.post_quality_matrix += local_info.post_quality_matrix;
+			
+			m_info.pre_base_matrix += local_info.pre_base_matrix;
+			m_info.post_base_matrix += local_info.post_base_matrix;
+				
+			m_info.pre_read_quality_histogram += local_info.pre_read_quality_histogram;
+			m_info.post_read_quality_histogram += local_info.post_read_quality_histogram;
+			
+			m_info.pre_base_quality_histogram += local_info.pre_base_quality_histogram;
+			m_info.post_base_quality_histogram += local_info.post_base_quality_histogram;
+			
+			m_info.pre_nuc_composition += local_info.pre_nuc_composition;
+			m_info.post_nuc_composition += local_info.post_nuc_composition;
+			
+			m_info.pre_length_histogram += local_info.pre_length_histogram;
+			m_info.post_length_histogram += local_info.post_length_histogram;
 		}
 	}
 
@@ -229,7 +228,7 @@ bool trim_read(Read &m_read,
 	PlotInfo &m_info, const Options &m_opt)
 {
 	bool ret = true;
-	
+
 	unsigned int len = m_read.seq.size();
 	
 	// To align quality and base statistics, track any trimming 
