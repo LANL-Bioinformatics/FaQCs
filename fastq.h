@@ -11,6 +11,9 @@
 	#error "Please compile with a zlib version >= 1.2.8"
 #endif
 
+#define	MIN_QUALITY_SCORE	0
+#define	MAX_QUALITY_SCORE	41
+
 inline char quality_score(const char m_quality, const char m_offset)
 {
 	// Please note that negative scores *are* allowed! The solexa+64 quality scores
@@ -22,8 +25,14 @@ inline char quality_score(const char m_quality, const char m_offset)
 	//}
 	
 	// Clamp the actual quality score to be greater than zero. This will need to change
-	// if a future format defines meaningfull negative quality scores!
-	return std::max(0, m_quality - m_offset);
+	// if a future format defines meaningfull negative quality scores!	
+	const char ret = std::max(0, m_quality - m_offset);
+
+	if(ret > MAX_QUALITY_SCORE){
+		throw __FILE__ ":quality_score: Found a quality score value that is greater than the maximum allowed quality score";
+	}
+
+	return ret;
 };
 
 bool next_read(gzFile m_fin, std::string &m_def, std::string &m_seq, std::string &m_quality);
