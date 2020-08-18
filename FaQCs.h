@@ -7,12 +7,9 @@
 #include <limits.h>
 #include "matrix.h"
 
-#define FaQCs_VERSION	"2.09"
+#define FaQCs_VERSION	"2.10"
 
 #define	AUTO_DETECT_QUALITY_OFFSET	SCHAR_MIN
-
-#define	MIN_QUALITY_SCORE	0
-#define	MAX_QUALITY_SCORE	41
 
 #define	DEFAULT_NEXTSEQ_QUALITY_SCORE	20
 
