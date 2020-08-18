@@ -1,0 +1,42 @@
+# Change log for FaQCs
+- Version 2.10 (Aug 18, 2020
+	* Check the upper-bound of quality score values and throw an error when the maximum allowed quality score is exceeded.
+	* Reordered the change log to display the newest changes first.
+- Version 2.09 (Aug 17, 2018)
+	* Added informative error messages to fasta.cpp and FaQCs.cpp to help users diagnose corrupted input files.
+- Version 2.08 (May 1, 2018)
+	* Fixed a bug due to the "--polyA" command line argument expecting an argument (it should be a boolean flag).
+- Version 2.07b (Mar 16, 2018)
+	* Fixed a bug in the "vector<T>& operator+=()" function in trim.cpp that improperly 
+	  truncated the length histogram (as displayed in the output plots). It was possible
+	  to completely erase the length histogram, which lead to an R script error (when
+	  the R function "read.table()" was passed an empty intput file).
+	* Fixed a bug in the "matrix& operator+=" function in matirx.h that improperly tuncated
+	  a matrix, leading to a missing file and R script error (similar to above bug with the
+	  vector += function).
+- Version 2.06 (Jan 9, 2018)
+	* Fixed bug that caused an error to be thrown when a negative quality score is encountered.
+	  As mentioned on the FASTQ wikipedia page (https://en.wikipedia.org/wiki/FASTQ_format), 
+	  the old solexa+64 format *does* allow for negative quality scores. As a quick fix, all quality 
+	  scores are now clamped to be greater than or equal to zero. The storage formats for the quality
+	  offset values (Options::input_quality_offset, Options::output_quality_offset and Options::quality) 
+	  have been changed to signed char values (previously these were unsigned int values).
+- Version 2.05 (Oct 18, 2017)
+	* Fixed bug  in R script that generated incorrectly normalized nucleotide 
+	  content plots (thanks Chien-Chi!).
+- Version 2.04 (Oct 17, 2017)
+	* Fixed bug that generated incorrect plots when 5' and/or 3' trimming (i.e. --5end or --3end)
+	  was used. Also corrected bug in the output R script implementation that passed the
+	  same quality matrix to the before and after graphs.
+- Version 2.03 (Oct 2, 2017)
+	* Fixed bug that caused an error to be thrown when the input quality scores were in 
+	  Illumina 1.5+ format (score offset == 64).
+- Version 2.02 (July 12, 2017)
+	* Fixed bug that did not property parse fastq deflines for paired-end data. This caused a spurious 
+	  error message about read 1 and read 2 not matching. Following the FaQCs.pl script, terminial
+	  "\.\d$" and "\/\d$" are now removed prior for testing if a pair of reads has a consistent header.
+- Version 2.01 (May 12, 2017)
+	* Fixed the bug that prevented '-t' from being recognized. The '-t <max num threads>' now
+	  functions the same way as the Perl version of FaQCs.pl
+
+	
