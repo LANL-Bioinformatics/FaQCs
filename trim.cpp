@@ -76,70 +76,82 @@ void trim(vector<Read> &m_buffer,
 	#pragma omp parallel
 	{
 		
-		// Accumulate filtering statistics in local buffers that will
-		// later be merged to accumulate global statistics
-		vector<size_t> local_filter_stats(FilterStat::NUM_STAT);
-		MAP< string, pair<size_t /*read*/, size_t /*base*/> > local_adapter_stats;
-		MAP<Word, size_t> local_kmer_table;
-		
-		PlotInfo local_info;
-		
-		if(m_opt.filter_adapter || m_opt.filter_phiX){
-			trim_adapters_and_phiX(m_buffer, local_adapter_stats, m_opt);
-		}
-		
-		#pragma omp for
-		for(unsigned int i = 0;i < buffer_size;++i){
+		try{
+			// Accumulate filtering statistics in local buffers that will
+			// later be merged to accumulate global statistics
+			vector<size_t> local_filter_stats(FilterStat::NUM_STAT);
+			MAP< string, pair<size_t /*read*/, size_t /*base*/> > local_adapter_stats;
+			MAP<Word, size_t> local_kmer_table;
+			
+			PlotInfo local_info;
+			
+			if(m_opt.filter_adapter || m_opt.filter_phiX){
+				trim_adapters_and_phiX(m_buffer, local_adapter_stats, m_opt);
+			}
+			
+			#pragma omp for
+			for(unsigned int i = 0;i < buffer_size;++i){
 
-			// A reference to the i^th read
-			Read &r = m_buffer[i];
-			
-			const bool valid = trim_read(
-				r,
-				local_filter_stats,
-				local_kmer_table,
-				local_info, m_opt);
+				// A reference to the i^th read
+				Read &r = m_buffer[i];
 				
-			if(!valid){
-				r.seq = r.qual = "";
+				const bool valid = trim_read(
+					r,
+					local_filter_stats,
+					local_kmer_table,
+					local_info, m_opt);
+					
+				if(!valid){
+					r.seq = r.qual = "";
+				}
+			}
+			
+			// Update the statistics
+			#pragma omp critical
+			{
+				m_filter_stats += local_filter_stats;
+				
+				for(MAP< string, pair<size_t, size_t> >::const_iterator i = local_adapter_stats.begin();
+					i != local_adapter_stats.end();++i){
+					
+					pair<size_t, size_t> &ref = m_adapter_stats[i->first];
+					
+					ref.first += i->second.first;
+					ref.second += i->second.second;
+				}
+			
+				for(MAP<Word, size_t>::const_iterator i = local_kmer_table.begin();i != local_kmer_table.end();++i){
+					m_kmer_table[i->first] += i->second;
+				}
+		
+				m_info.pre_quality_matrix += local_info.pre_quality_matrix;
+				m_info.post_quality_matrix += local_info.post_quality_matrix;
+				
+				m_info.pre_base_matrix += local_info.pre_base_matrix;
+				m_info.post_base_matrix += local_info.post_base_matrix;
+					
+				m_info.pre_read_quality_histogram += local_info.pre_read_quality_histogram;
+				m_info.post_read_quality_histogram += local_info.post_read_quality_histogram;
+				
+				m_info.pre_base_quality_histogram += local_info.pre_base_quality_histogram;
+				m_info.post_base_quality_histogram += local_info.post_base_quality_histogram;
+				
+				m_info.pre_nuc_composition += local_info.pre_nuc_composition;
+				m_info.post_nuc_composition += local_info.post_nuc_composition;
+				
+				m_info.pre_length_histogram += local_info.pre_length_histogram;
+				m_info.post_length_histogram += local_info.post_length_histogram;
 			}
 		}
-		
-		// Update the statistics
-		#pragma omp critical
-		{
-			m_filter_stats += local_filter_stats;
-			
-			for(MAP< string, pair<size_t, size_t> >::const_iterator i = local_adapter_stats.begin();
-				i != local_adapter_stats.end();++i){
-				
-				pair<size_t, size_t> &ref = m_adapter_stats[i->first];
-				
-				ref.first += i->second.first;
-				ref.second += i->second.second;
-			}
-		
-			for(MAP<Word, size_t>::const_iterator i = local_kmer_table.begin();i != local_kmer_table.end();++i){
-				m_kmer_table[i->first] += i->second;
-			}
-	
-			m_info.pre_quality_matrix += local_info.pre_quality_matrix;
-			m_info.post_quality_matrix += local_info.post_quality_matrix;
-			
-			m_info.pre_base_matrix += local_info.pre_base_matrix;
-			m_info.post_base_matrix += local_info.post_base_matrix;
-				
-			m_info.pre_read_quality_histogram += local_info.pre_read_quality_histogram;
-			m_info.post_read_quality_histogram += local_info.post_read_quality_histogram;
-			
-			m_info.pre_base_quality_histogram += local_info.pre_base_quality_histogram;
-			m_info.post_base_quality_histogram += local_info.post_base_quality_histogram;
-			
-			m_info.pre_nuc_composition += local_info.pre_nuc_composition;
-			m_info.post_nuc_composition += local_info.post_nuc_composition;
-			
-			m_info.pre_length_histogram += local_info.pre_length_histogram;
-			m_info.post_length_histogram += local_info.post_length_histogram;
+		catch(const char *error){
+
+			cerr << "Error: " << error << endl;
+			throw error;
+		}
+		catch(...){
+
+			cerr << "Caught an unhandled error in trim()" << endl;
+			throw __FILE__ ":trim: Caught an unhandled error";
 		}
 	}
 
@@ -944,8 +956,8 @@ unsigned int trim_adapters_and_phiX(Read &m_read)
 
 // ** NOTE **
 // The trim_adapters_and_phiX() function is intended to be called within an OpenMP parallel section.
-// All of the local variables within this function are therefor *thread local*!
-// In addition, it is assumes that the m_adapter_stats variable that is passed to this function
+// All of the local variables within this function are therefore *thread local*!
+// In addition, it is assumed that the m_adapter_stats variable that is passed to this function
 // is also *thread local* (otherwise we will have a race condition on our hands).
 void trim_adapters_and_phiX(vector<Read> &m_buffer, 
 	MAP< string, pair<size_t /*read*/, size_t /*base*/> > &m_adapter_stats,
