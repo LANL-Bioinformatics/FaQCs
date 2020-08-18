@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <limits.h>
 #include "matrix.h"
+#include "fastq.h"
 
 #define FaQCs_VERSION	"2.10"
 
