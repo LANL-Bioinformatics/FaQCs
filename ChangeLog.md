@@ -2,6 +2,7 @@
 - Version 2.10 (Aug 18, 2020
 	* Check the upper-bound of quality score values and throw an error when the maximum allowed quality score is exceeded.
 	* Reordered the change log to display the newest changes first.
+	* Added a try/catch block in the trim() function to print thread-level errors.
 - Version 2.09 (Aug 17, 2018)
 	* Added informative error messages to fasta.cpp and FaQCs.cpp to help users diagnose corrupted input files.
 - Version 2.08 (May 1, 2018)
