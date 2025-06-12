@@ -1,4 +1,6 @@
 # Change log for FaQCs
+- Version 2.11 (Jun 12, 2025)
+        * Adjust max quality score to 55 for ElemBio
 - Version 2.10 (Aug 18, 2020
 	* Check the upper-bound of quality score values and throw an error when the maximum allowed quality score is exceeded.
 	* Reordered the change log to display the newest changes first.

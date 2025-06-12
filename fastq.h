@@ -12,7 +12,7 @@
 #endif
 
 #define	MIN_QUALITY_SCORE	0
-#define	MAX_QUALITY_SCORE	41
+#define	MAX_QUALITY_SCORE	55
 
 inline char quality_score(const char m_quality, const char m_offset)
 {

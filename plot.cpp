@@ -468,7 +468,7 @@ void plot(const PlotInfo &m_info, vector<size_t> &m_filter_stats, const Options 
 	script << "title(\"Quality 3D plot. (Position vs. Score vs. Frequency)\")\n";
 	script << "\n";
 	script << "#Quality count bar plot\n";
-	script << "upper_limit<-41\n";
+	script << "upper_limit<-MAX_QUALITY_SCORE\n";
 	script << "quality_count_histogram<-function(quality_matrix_file,totalReads,highestScore,xlab,ylab){\n";
 	script << "    z<-as.matrix(read.table(file=quality_matrix_file));\n";
 	script << "    col<-colSums(z)\n";
@@ -477,7 +477,7 @@ void plot(const PlotInfo &m_info, vector<size_t> &m_filter_stats, const Options 
 	script << "    color<-c(rep('blue',less30columnNum),rep('darkgreen',atleast30columnNum))\n";
 	script << "    over30per<-sprintf(\"%.2f%%\",sum(col[(less30columnNum+1):length(col)])/sum(col)*100)\n";
 	script << "    countInM<-col/1000000\n";
-	script << "    avgQ<-sprintf(\"%.2f\",sum(seq(0,41,1)*col)/sum(col))\n";
+	script << "    avgQ<-sprintf(\"%.2f\",sum(seq(0,MAX_QUALITY_SCORE,1)*col)/sum(col))\n";
 	script << "    plot(seq(0,highestScore,1),countInM,col=color,type='h',ylab=ylab,xlab=xlab,lwd=12,lend=2,bty='n')\n";
 	script << "    abline(v=29.5,col='darkgreen')\n";
 	script << "    text(30,(max(countInM)-min(countInM))*0.9,labels=\">=Q30\",cex=0.8,adj=0,col='darkgreen')\n";
