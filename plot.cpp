@@ -468,6 +468,7 @@ void plot(const PlotInfo &m_info, vector<size_t> &m_filter_stats, const Options 
 	script << "title(\"Quality 3D plot. (Position vs. Score vs. Frequency)\")\n";
 	script << "\n";
 	script << "#Quality count bar plot\n";
+	script << "MAX_QUALITY_SCORE <- 55\n";
 	script << "upper_limit<-MAX_QUALITY_SCORE\n";
 	script << "quality_count_histogram<-function(quality_matrix_file,totalReads,highestScore,xlab,ylab){\n";
 	script << "    z<-as.matrix(read.table(file=quality_matrix_file));\n";
