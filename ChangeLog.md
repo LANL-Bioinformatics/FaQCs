@@ -1,4 +1,6 @@
 # Change log for FaQCs
+- Version 2.12 (Jun 16, 2025)
+        * fix bug on MAX_QUALITY_SCORE for Rscript
 - Version 2.11 (Jun 12, 2025)
         * Adjust max quality score to 55 for ElemBio
 - Version 2.10 (Aug 18, 2020

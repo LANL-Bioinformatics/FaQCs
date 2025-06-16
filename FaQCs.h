@@ -8,7 +8,7 @@
 #include "matrix.h"
 #include "fastq.h"
 
-#define FaQCs_VERSION	"2.11"
+#define FaQCs_VERSION	"2.12"
 
 #define	AUTO_DETECT_QUALITY_OFFSET	SCHAR_MIN
 
